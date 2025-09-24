@@ -1278,19 +1278,69 @@
     </div>
     
     <script>
-
-      // CONFIGURATION - Update these with your values
+        // ===== CONFIGURATION - UPDATE THESE VALUES =====
         const CONFIG = {
-            scriptUrl: 'https://script.google.com/macros/s/AKfycbzFyMgv6n-VYky9VvTTNUSUa4mw6-7bNsDpKp2ESkKHJ8Q3kdnuWUZREEohzBzvuhdtEQ/exec',  // From Step 2.2
-            sheetId: 'https://docs.google.com/spreadsheets/d/1AthXyV7DgmtedL4t2kzLKAWAybqB-tDlv0sL0h2WSvA/edit?usp=sharin',       // From your Google Sheet URL
-            yourCalendarId: 'nicolas.reitzin@gmail.com',
-            partnerCalendarId: 'rheaamarie@gmail.com',
+            scriptUrl: 'https://script.google.com/macros/s/AKfycbzFyMgv6n-VYky9VvTTNUSUa4mw6-7bNsDpKp2ESkKHJ8Q3kdnuWUZREEohzBzvuhdtEQ/exec', // Paste your Google Apps Script URL here (from deployment)
+            sheetId: 'https://docs.google.com/spreadsheets/d/1AthXyV7DgmtedL4t2kzLKAWAybqB-tDlv0sL0h2WSvA/edit?usp=sharin', // Your Google Sheet ID (from the URL)
+            yourCalendarId: 'nicolas.reitzin@gmail.com', // your-email@gmail.com
+            partnerCalendarId: 'rheaamarie@gmail.com', // partner-email@gmail.com
             nannyName: 'Daniella',
             hourlyRate: 26,
             yourName: 'Nick',
             partnerName: 'Rhea'
-          };
-        // Tab Management
+        };
+        
+        // Check if configured
+        if (!CONFIG.scriptUrl) {
+            alert('⚠️ Setup Required!\n\n1. Follow the setup guide to create Google Sheet\n2. Deploy the Apps Script\n3. Add your URLs to CONFIG above\n\nSee console for detailed instructions.');
+            console.log(`
+            🚀 QUICK SETUP INSTRUCTIONS:
+            
+            1. CREATE GOOGLE SHEET:
+               - Go to sheets.google.com
+               - Create new sheet "Family Hub Database"
+               - Add tabs: TimeTracking, Schedule, Activities, ParentEquity, Settings
+            
+            2. ADD APPS SCRIPT:
+               - In sheet: Extensions → Apps Script
+               - Paste the backend script from setup guide
+               - Deploy → Web app → Copy URL
+            
+            3. UPDATE CONFIG ABOVE:
+               - scriptUrl: 'YOUR_SCRIPT_URL'
+               - sheetId: 'YOUR_SHEET_ID'
+               - yourCalendarId: 'your-email@gmail.com'
+               - partnerCalendarId: 'partner-email@gmail.com'
+            
+            4. SAVE & REFRESH!
+            `);
+        }
+        
+        // ===== GOOGLE SHEETS INTEGRATION =====
+        
+        async function callGoogleScript(action, params = {}) {
+            if (!CONFIG.scriptUrl) {
+                console.error('Script URL not configured');
+                return null;
+            }
+            
+            const url = new URL(CONFIG.scriptUrl);
+            url.searchParams.append('action', action);
+            Object.keys(params).forEach(key => {
+                url.searchParams.append(key, params[key]);
+            });
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Error calling script:', error);
+                return null;
+            }
+        }
+        
+        // ===== TAB MANAGEMENT =====
         function switchTab(tabName) {
             // Hide all tabs
             document.querySelectorAll('.tab-content').forEach(tab => {
@@ -1305,33 +1355,295 @@
                 btn.classList.remove('active');
             });
             event.target.classList.add('active');
+            
+            // Load data for the tab
+            loadTabData(tabName);
         }
         
-        // Clock Functions
-        function clockIn() {
-            const now = new Date();
-            alert(`Clocked in at ${now.toLocaleTimeString()}`);
-            updateDashboard();
+        async function loadTabData(tabName) {
+            switch(tabName) {
+                case 'dashboard':
+                    await loadDashboard();
+                    break;
+                case 'schedule':
+                    await loadSchedule();
+                    break;
+                case 'nanny':
+                    await loadNannyData();
+                    break;
+                case 'activities':
+                    await loadActivities();
+                    break;
+                case 'equity':
+                    await loadEquityData();
+                    break;
+            }
         }
         
-        function clockOut() {
-            const now = new Date();
-            alert(`Clocked out at ${now.toLocaleTimeString()}`);
-            updateDashboard();
+        // ===== DASHBOARD FUNCTIONS =====
+        async function loadDashboard() {
+            // Get current nanny status
+            const status = await callGoogleScript('getCurrentStatus', {name: CONFIG.nannyName});
+            if (status && status.status === 'clocked_in') {
+                document.querySelector('.status-badge:nth-child(2) span').textContent = '👶 Nanny: On Duty';
+                document.querySelector('.status-badge:nth-child(2)').classList.add('active');
+            }
+            
+            // Get weekly summary
+            const timeEntries = await callGoogleScript('getTimeEntries', {weekOnly: true});
+            if (timeEntries && timeEntries.entries) {
+                let totalHours = 0;
+                timeEntries.entries.forEach(entry => {
+                    if (entry.hours) totalHours += parseFloat(entry.hours);
+                });
+                
+                // Update dashboard cards
+                const weekHoursCard = document.querySelector('.dashboard-card:nth-child(3) .value');
+                if (weekHoursCard) weekHoursCard.textContent = totalHours.toFixed(1);
+            }
+            
+            // Get parent equity
+            const equity = await callGoogleScript('getEquityData');
+            if (equity && equity.weeklyHours) {
+                const equityCard = document.querySelector('.dashboard-card:nth-child(2) .value');
+                if (equityCard) {
+                    equityCard.textContent = `${equity.weeklyHours.youPercent}/${equity.weeklyHours.partnerPercent}`;
+                }
+            }
+            
+            // Load today's schedule
+            await loadTodaySchedule();
         }
         
-        // Toggle Switch
+        async function loadTodaySchedule() {
+            const schedule = await callGoogleScript('getSchedule', {
+                startDate: new Date().toISOString(),
+                endDate: new Date().toISOString()
+            });
+            
+            if (schedule && schedule.schedule) {
+                // Update timeline with real data
+                console.log('Today schedule:', schedule.schedule);
+            }
+        }
+        
+        // ===== SCHEDULE COORDINATOR FUNCTIONS =====
+        async function loadSchedule() {
+            // Get calendar events
+            const events = await callGoogleScript('syncCalendars', {
+                calendarIds: `${CONFIG.yourCalendarId},${CONFIG.partnerCalendarId}`,
+                privacy: true // Show as "Busy" for nanny
+            });
+            
+            if (events && events.events) {
+                console.log('Calendar events:', events.events);
+                // Update the calendar grid with real events
+                updateCalendarGrid(events.events);
+            }
+            
+            // Get AI suggestions
+            const suggestions = await callGoogleScript('suggestNannyHours');
+            if (suggestions) {
+                updateAISuggestions(suggestions);
+            }
+        }
+        
+        function updateCalendarGrid(events) {
+            // Group events by day
+            const eventsByDay = {};
+            events.forEach(event => {
+                const day = new Date(event.start).toLocaleDateString('en-US', {weekday: 'long'});
+                if (!eventsByDay[day]) eventsByDay[day] = [];
+                eventsByDay[day].push(event);
+            });
+            
+            console.log('Events by day:', eventsByDay);
+            // Update the visual calendar grid
+        }
+        
+        function updateAISuggestions(suggestions) {
+            // Update the AI suggestion box with real data
+            if (suggestions.totalCost) {
+                const suggestionBox = document.querySelector('.ai-suggestion p strong');
+                if (suggestionBox) {
+                    suggestionBox.textContent = `Estimated cost: ${suggestions.totalCost} (${suggestions.totalHours} hours × ${CONFIG.hourlyRate}/hr)`;
+                }
+            }
+        }
+        
+        // ===== NANNY TRACKER FUNCTIONS =====
+        async function clockIn() {
+            const result = await callGoogleScript('clockIn', {
+                name: CONFIG.nannyName
+            });
+            
+            if (result && result.success) {
+                alert(`✅ Clocked in at ${new Date(result.time).toLocaleTimeString()}`);
+                await loadNannyData();
+                await loadDashboard();
+            } else {
+                alert('Error clocking in. Please try again.');
+            }
+        }
+        
+        async function clockOut() {
+            // Get notes from daily checklist (if on nanny view)
+            const notes = document.getElementById('dailyNotes')?.value || '';
+            const checklist = [];
+            
+            ['meals', 'nap', 'homework', 'activities', 'medication'].forEach(id => {
+                const checkbox = document.getElementById(id);
+                if (checkbox && checkbox.checked) {
+                    checklist.push(id);
+                }
+            });
+            
+            const result = await callGoogleScript('clockOut', {
+                name: CONFIG.nannyName,
+                notes: notes,
+                checklist: checklist.join(', ')
+            });
+            
+            if (result && result.success) {
+                alert(`✅ Clocked out! Worked ${result.hours} hours today.`);
+                await loadNannyData();
+                await loadDashboard();
+            } else {
+                alert('Error clocking out. Please try again.');
+            }
+        }
+        
+        async function loadNannyData() {
+            const entries = await callGoogleScript('getTimeEntries', {weekOnly: true});
+            
+            if (entries && entries.entries) {
+                const tbody = document.querySelector('#nanny-tab tbody');
+                if (!tbody) return;
+                
+                tbody.innerHTML = '';
+                let totalHours = 0;
+                let totalEarnings = 0;
+                
+                entries.entries.forEach(entry => {
+                    if (entry.clockOut) {
+                        const hours = parseFloat(entry.hours) || 0;
+                        const earnings = hours * CONFIG.hourlyRate;
+                        totalHours += hours;
+                        totalEarnings += earnings;
+                        
+                        const row = tbody.insertRow();
+                        row.innerHTML = `
+                            <td>${new Date(entry.date).toLocaleDateString()}</td>
+                            <td>${new Date(entry.clockIn).toLocaleTimeString()}</td>
+                            <td>${new Date(entry.clockOut).toLocaleTimeString()}</td>
+                            <td>${hours.toFixed(1)}</td>
+                            <td>${earnings.toFixed(2)}</td>
+                            <td>${entry.notes || ''}</td>
+                        `;
+                    }
+                });
+                
+                // Update totals
+                const totalDiv = document.querySelector('#nanny-tab .card div[style*="font-size: 2em"]');
+                if (totalDiv) {
+                    totalDiv.innerHTML = `Total: ${totalEarnings.toFixed(2)} (${totalHours.toFixed(1)} hours)`;
+                }
+            }
+        }
+        
+        // ===== ACTIVITIES FUNCTIONS =====
+        async function loadActivities() {
+            const activities = await callGoogleScript('getActivities');
+            
+            if (activities && activities.activities) {
+                console.log('Activities:', activities.activities);
+                // Update activities list with real data
+            }
+        }
+        
+        // ===== EQUITY FUNCTIONS =====
+        async function loadEquityData() {
+            const equity = await callGoogleScript('getEquityData');
+            
+            if (equity && equity.weeklyHours) {
+                // Update week equity bar
+                const youBar = document.querySelector('.equity-you');
+                const partnerBar = document.querySelector('.equity-partner');
+                
+                if (youBar && partnerBar) {
+                    youBar.style.width = `${equity.weeklyHours.youPercent}%`;
+                    youBar.textContent = `${CONFIG.yourName}: ${equity.weeklyHours.youPercent}%`;
+                    partnerBar.style.width = `${equity.weeklyHours.partnerPercent}%`;
+                    partnerBar.textContent = `${CONFIG.partnerName}: ${equity.weeklyHours.partnerPercent}%`;
+                }
+                
+                // Update hour counts
+                const legendItems = document.querySelectorAll('.equity-legend-item span');
+                if (legendItems.length >= 2) {
+                    legendItems[0].textContent = `${CONFIG.yourName}: ${equity.weeklyHours.you.toFixed(1)} hours`;
+                    legendItems[1].textContent = `${CONFIG.partnerName}: ${equity.weeklyHours.partner.toFixed(1)} hours`;
+                }
+            }
+        }
+        
+        // ===== PAYMENT FUNCTIONS =====
+        async function generateVenmoPayment() {
+            const entries = await callGoogleScript('getTimeEntries', {weekOnly: true});
+            
+            if (entries && entries.entries) {
+                let totalHours = 0;
+                entries.entries.forEach(entry => {
+                    if (entry.hours) totalHours += parseFloat(entry.hours);
+                });
+                
+                const totalPay = totalHours * CONFIG.hourlyRate;
+                const weekStart = new Date();
+                weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+                
+                const message = `Weekly payment for ${CONFIG.nannyName}
+Week of ${weekStart.toLocaleDateString()}
+Hours: ${totalHours.toFixed(1)}
+Rate: ${CONFIG.hourlyRate}/hour
+Total: ${totalPay.toFixed(2)}`;
+                
+                // Copy to clipboard
+                navigator.clipboard.writeText(message).then(() => {
+                    alert(`✅ Payment details copied!\n\n${message}`);
+                });
+            }
+        }
+        
+        // ===== INITIALIZATION =====
+        async function initializeFamilyHub() {
+            if (!CONFIG.scriptUrl) {
+                console.log('Waiting for configuration...');
+                return;
+            }
+            
+            console.log('🚀 Initializing Family Hub...');
+            
+            // Load dashboard by default
+            await loadDashboard();
+            
+            // Set up auto-refresh every minute
+            setInterval(async () => {
+                const activeTab = document.querySelector('.tab-content.active').id.replace('-tab', '');
+                await loadTabData(activeTab);
+            }, 60000);
+            
+            console.log('✅ Family Hub ready!');
+        }
+        
+        // ===== HELPER FUNCTIONS =====
+        
         function toggleSwitch(element) {
             element.classList.toggle('active');
+            // Save preference
+            const setting = element.parentElement.querySelector('strong').textContent;
+            const enabled = element.classList.contains('active');
+            console.log(`Setting ${setting}: ${enabled}`);
         }
         
-        // Update Dashboard
-        function updateDashboard() {
-            // This would pull from your data source
-            console.log('Updating dashboard...');
-        }
-        
-        // Quick Add
         function showQuickAdd() {
             const action = prompt('Quick Add:\n1. Schedule change\n2. Activity\n3. Note\n4. Request coverage\n\nEnter number:');
             switch(action) {
@@ -1349,75 +1661,16 @@
                     break;
                 case '4':
                     const request = prompt('When do you need coverage?');
-                    if (request) alert('Coverage request sent to Rhea: ' + request);
+                    if (request) alert('Coverage request sent to partner: ' + request);
                     break;
             }
         }
         
-        // Simulate real-time updates
-        setInterval(() => {
-            // Update current time indicator
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-            
-            // Update status badges
-            const nannyStatus = document.querySelector('.status-badge:nth-child(2) span');
-            const hour = now.getHours();
-            if (hour >= 9 && hour < 17) {
-                nannyStatus.textContent = '👶 Nanny: On Duty';
-                nannyStatus.parentElement.classList.add('active');
-            } else {
-                nannyStatus.textContent = '👶 Nanny: Off';
-                nannyStatus.parentElement.classList.remove('active');
-            }
-        }, 60000); // Update every minute
-        
-        // Initialize
+        // Start the app when page loads
         document.addEventListener('DOMContentLoaded', () => {
-            updateDashboard();
-            
-            // Sample daily briefing notification
-            if (new Date().getHours() === 7 && new Date().getMinutes() === 0) {
-                alert('📧 Daily Briefing sent to your email!');
-            }
+            initializeFamilyHub();
         });
-        
-        // Generate Sample AI Suggestion
-        function generateAISuggestion() {
-            const suggestions = [
-                "Thursday looks light - consider giving nanny a half day to save $80",
-                "Rhea has 3 late meetings this week - schedule extra nanny coverage for evenings",
-                "You've covered bedtime 4 nights straight - suggest Rhea takes tonight",
-                "Soccer practice conflicts with your meeting Tuesday - nanny needs to stay late",
-                "Next week has 2 doctor appointments - add to nanny's schedule"
-            ];
-            
-            const random = suggestions[Math.floor(Math.random() * suggestions.length)];
-            console.log('AI Suggestion:', random);
-        }
-        
-        // Calendar Integration Mock
-        function syncCalendars() {
-            console.log('Syncing with Google Calendar...');
-            // This would connect to Google Calendar API
-            setTimeout(() => {
-                alert('Calendars synced successfully! Found 5 conflicts for next week.');
-                switchTab('schedule');
-            }, 1500);
-        }
-        
-        // Export Functions
-        function exportSchedule() {
-            console.log('Exporting schedule to PDF/CSV...');
-        }
-        
-        function shareWithNanny() {
-            const nannyView = confirm('Generate nanny-friendly view of this week\'s schedule?');
-            if (nannyView) {
-                alert('Shareable link copied: familyhub.app/nanny/week47');
-            }
-        }
     </script>
 </body>
-
 </html>
+
