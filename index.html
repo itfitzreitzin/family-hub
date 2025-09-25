@@ -1280,14 +1280,15 @@
     <script>
         // ===== CONFIGURATION - UPDATE THESE VALUES =====
         const CONFIG = {
-            scriptUrl: 'https://script.google.com/macros/s/AKfycbz0D5lzPKspVmhzhliFK26yzTrtUMaATAmxJOLf4nlPM78TwRe8II7cQi6C6VVGS5AFsQ/exec', // Paste your Google Apps Script URL here (from deployment)
-            sheetId: 'https://docs.google.com/spreadsheets/d/1AthXyV7DgmtedL4t2kzLKAWAybqB-tDlv0sL0h2WSvA/edit?usp=sharin', // Your Google Sheet ID (from the URL)
-            yourCalendarId: 'nicolas.reitzin@gmail.com', // your-email@gmail.com
-            partnerCalendarId: 'rheaamarie@gmail.com', // partner-email@gmail.com
-            nannyName: 'Daniella',
-            hourlyRate: 26,
-            yourName: 'Nick',
-            partnerName: 'Rhea'
+            scriptUrl: localStorage.getItem('scriptUrl') || '', // Your Google Apps Script URL
+            sheetId: localStorage.getItem('sheetId') || '', // Your Google Sheet ID
+            yourCalendarId: localStorage.getItem('yourCalendarId') || 'your-email@gmail.com',
+            partnerCalendarId: localStorage.getItem('partnerCalendarId') || 'partner-email@gmail.com',
+            nannyName: localStorage.getItem('nannyName') || 'Your Nanny Name Here',
+            hourlyRate: parseFloat(localStorage.getItem('hourlyRate')) || 20,
+            yourName: localStorage.getItem('yourName') || 'Your Name',
+            partnerName: localStorage.getItem('partnerName') || 'Partner Name',
+            venmoUsername: localStorage.getItem('venmoUsername') || '@username'
         };
         
         // Check if configured
@@ -1429,36 +1430,181 @@
         
         // ===== SCHEDULE COORDINATOR FUNCTIONS =====
         async function loadSchedule() {
-            // Get calendar events
-            const events = await callGoogleScript('syncCalendars', {
-                calendarIds: `${CONFIG.yourCalendarId},${CONFIG.partnerCalendarId}`,
-                privacy: true // Show as "Busy" for nanny
-            });
+            console.log('Loading schedule with calendars:', CONFIG.yourCalendarId, CONFIG.partnerCalendarId);
             
-            if (events && events.events) {
-                console.log('Calendar events:', events.events);
-                // Update the calendar grid with real events
-                updateCalendarGrid(events.events);
+            // First test calendar access
+            const test = await callGoogleScript('testCalendarAccess');
+            if (test && !test.success) {
+                alert('⚠️ Calendar not connected. Please:\n1. Enable Calendar API in Apps Script Services\n2. Re-deploy your script\n3. Authorize calendar access');
+                return;
             }
             
-            // Get AI suggestions
-            const suggestions = await callGoogleScript('suggestNannyHours');
-            if (suggestions) {
-                updateAISuggestions(suggestions);
+            // Sync all calendars
+            const syncResult = await callGoogleScript('syncAllCalendars', {
+                yourCalendarId: CONFIG.yourCalendarId,
+                partnerCalendarId: CONFIG.partnerCalendarId
+            });
+            
+            if (syncResult && syncResult.allEvents) {
+                console.log('Synced events:', syncResult);
+                updateCalendarGrid(syncResult);
+                
+                // Update AI suggestions with real data
+                if (syncResult.suggestions) {
+                    updateAISuggestionsWithReal(syncResult.suggestions);
+                }
+            } else {
+                // Fallback to individual calendar fetching
+                await loadIndividualCalendars();
             }
         }
         
-        function updateCalendarGrid(events) {
-            // Group events by day
-            const eventsByDay = {};
-            events.forEach(event => {
-                const day = new Date(event.start).toLocaleDateString('en-US', {weekday: 'long'});
-                if (!eventsByDay[day]) eventsByDay[day] = [];
-                eventsByDay[day].push(event);
+        async function loadIndividualCalendars() {
+            // Get your calendar
+            const yourEvents = await callGoogleScript('getCalendarEvents', {
+                calendarId: CONFIG.yourCalendarId,
+                privacy: false
             });
             
-            console.log('Events by day:', eventsByDay);
-            // Update the visual calendar grid
+            // Get partner calendar  
+            const partnerEvents = await callGoogleScript('getCalendarEvents', {
+                calendarId: CONFIG.partnerCalendarId,
+                privacy: false
+            });
+            
+            console.log('Your events:', yourEvents);
+            console.log('Partner events:', partnerEvents);
+            
+            // Combine and display
+            if (yourEvents && partnerEvents) {
+                const combined = {
+                    allEvents: [
+                        ...(yourEvents.events || []).map(e => ({...e, owner: 'You'})),
+                        ...(partnerEvents.events || []).map(e => ({...e, owner: CONFIG.partnerName}))
+                    ]
+                };
+                updateCalendarGrid(combined);
+            }
+        }
+        
+        function updateCalendarGrid(data) {
+            if (!data.allEvents) return;
+            
+            // Group events by day and person
+            const schedule = {
+                Monday: {You: [], Partner: [], Nanny: []},
+                Tuesday: {You: [], Partner: [], Nanny: []},
+                Wednesday: {You: [], Partner: [], Nanny: []},
+                Thursday: {You: [], Partner: [], Nanny: []},
+                Friday: {You: [], Partner: [], Nanny: []}
+            };
+            
+            // Sort events into days
+            data.allEvents.forEach(event => {
+                const day = new Date(event.start).toLocaleDateString('en-US', {weekday: 'long'});
+                const time = new Date(event.start).toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit'
+                });
+                
+                if (schedule[day]) {
+                    const owner = event.owner === 'You' ? 'You' : 'Partner';
+                    schedule[day][owner].push({
+                        time: time,
+                        title: event.displayTitle || event.title,
+                        duration: ((new Date(event.end) - new Date(event.start)) / (1000 * 60 * 60)).toFixed(1)
+                    });
+                }
+            });
+            
+            // Update the visual grid
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+            days.forEach((day, index) => {
+                // Update You row
+                const youCell = document.querySelector(`.calendar-grid .calendar-cell:nth-child(${7 + index + 1})`);
+                if (youCell) {
+                    const events = schedule[day].You;
+                    if (events.length > 0) {
+                        youCell.className = 'calendar-cell busy';
+                        youCell.innerHTML = events.map(e => `${e.time}: ${e.title}`).join('<br>');
+                    } else {
+                        youCell.className = 'calendar-cell available';
+                        youCell.innerHTML = 'Free';
+                    }
+                }
+                
+                // Update Partner row
+                const partnerCell = document.querySelector(`.calendar-grid .calendar-cell:nth-child(${13 + index + 1})`);
+                if (partnerCell) {
+                    const events = schedule[day].Partner;
+                    if (events.length > 0) {
+                        partnerCell.className = 'calendar-cell busy';
+                        partnerCell.innerHTML = events.map(e => `${e.time}: ${e.title}`).join('<br>');
+                    } else {
+                        partnerCell.className = 'calendar-cell available';
+                        partnerCell.innerHTML = 'Free';
+                    }
+                }
+                
+                // Update coverage status
+                const coverageCell = document.querySelector(`.calendar-grid .calendar-cell:nth-child(${25 + index + 1})`);
+                if (coverageCell) {
+                    const youBusy = schedule[day].You.length > 0;
+                    const partnerBusy = schedule[day].Partner.length > 0;
+                    
+                    if (youBusy && partnerBusy) {
+                        coverageCell.innerHTML = '<span class="coverage-indicator">⚠️</span> Need nanny';
+                        coverageCell.className = 'calendar-cell busy';
+                    } else if (youBusy || partnerBusy) {
+                        coverageCell.innerHTML = '<span class="coverage-indicator">⚠️</span> Partial';
+                        coverageCell.className = 'calendar-cell partial';
+                    } else {
+                        coverageCell.innerHTML = '<span class="coverage-indicator">✅</span> Covered';
+                        coverageCell.className = 'calendar-cell available';
+                    }
+                }
+            });
+            
+            // Show conflicts if any
+            if (data.conflicts && data.conflicts.length > 0) {
+                console.log('Schedule conflicts found:', data.conflicts);
+            }
+        }
+        
+        function updateAISuggestionsWithReal(suggestions) {
+            if (!suggestions || !suggestions.daily) return;
+            
+            // Update the AI suggestion box with real calendar-based suggestions
+            const suggestionList = document.querySelector('.ai-suggestion ul');
+            if (suggestionList) {
+                suggestionList.innerHTML = '';
+                
+                ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].forEach(day => {
+                    const daySuggestion = suggestions.daily[day];
+                    if (daySuggestion) {
+                        const li = document.createElement('li');
+                        const dayName = day.charAt(0).toUpperCase() + day.slice(1);
+                        
+                        if (daySuggestion.recommendedHours > 0) {
+                            li.innerHTML = `<strong>${dayName}:</strong> ${daySuggestion.start} - ${daySuggestion.end} (${daySuggestion.reason})`;
+                        } else {
+                            li.innerHTML = `<strong>${dayName}:</strong> Day off - ${daySuggestion.reason}`;
+                        }
+                        suggestionList.appendChild(li);
+                    }
+                });
+                
+                // Update totals
+                const costText = document.querySelector('.ai-suggestion p:nth-of-type(2)');
+                if (costText) {
+                    costText.innerHTML = `<strong>Estimated cost:</strong> ${suggestions.estimatedCost} (${suggestions.totalHours} hours × ${CONFIG.hourlyRate}/hr)`;
+                }
+                
+                const savingsText = document.querySelector('.ai-suggestion p:nth-of-type(3)');
+                if (savingsText) {
+                    savingsText.innerHTML = `<strong>Savings:</strong> ${suggestions.potentialSavings} vs full-time coverage`;
+                }
+            }
         }
         
         function updateAISuggestions(suggestions) {
@@ -1636,12 +1782,34 @@ Total: ${totalPay.toFixed(2)}`;
         
         // ===== HELPER FUNCTIONS =====
         
-        function toggleSwitch(element) {
-            element.classList.toggle('active');
-            // Save preference
-            const setting = element.parentElement.querySelector('strong').textContent;
-            const enabled = element.classList.contains('active');
-            console.log(`Setting ${setting}: ${enabled}`);
+        // ===== SETTINGS FUNCTIONS =====
+        function saveSettings() {
+            // Get values from settings tab
+            const nannyName = document.getElementById('nannyName').value;
+            const hourlyRate = document.getElementById('hourlyRate').value;
+            const venmoUsername = document.getElementById('venmoUsername').value;
+            
+            // Save to localStorage
+            localStorage.setItem('nannyName', nannyName);
+            localStorage.setItem('hourlyRate', hourlyRate);
+            localStorage.setItem('venmoUsername', venmoUsername);
+            
+            // Update CONFIG
+            CONFIG.nannyName = nannyName;
+            CONFIG.hourlyRate = parseFloat(hourlyRate);
+            CONFIG.venmoUsername = venmoUsername;
+            
+            alert('Settings saved successfully!');
+            
+            // Reload data with new settings
+            loadDashboard();
+        }
+        
+        function loadSettings() {
+            // Load saved values into settings form
+            document.getElementById('nannyName').value = CONFIG.nannyName;
+            document.getElementById('hourlyRate').value = CONFIG.hourlyRate;
+            document.getElementById('venmoUsername').value = CONFIG.venmoUsername || '';
         }
         
         function showQuickAdd() {
@@ -1673,5 +1841,3 @@ Total: ${totalPay.toFixed(2)}`;
     </script>
 </body>
 </html>
-
-
