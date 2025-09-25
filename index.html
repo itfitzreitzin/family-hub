@@ -990,7 +990,7 @@
                     <div style="font-size: 2em; color: #667eea; margin: 10px 0;">
                         Total: $460 (23 hours)
                     </div>
-                    <button class="btn btn-primary btn-large">Generate Venmo Payment</button>
+                    <button class="btn btn-primary btn-large" onclick="generateVenmoPayment()">Generate Venmo Payment</button>
                 </div>
             </div>
         </div>
@@ -1175,7 +1175,27 @@
                         <input type="text" placeholder="@username" id="venmoUsername">
                     </div>
                 </div>
-                <button class="btn btn-primary">Save Settings</button>
+                <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+            </div>
+            
+            <div class="card">
+                <h2>🔧 Technical Settings</h2>
+                <div class="input-group">
+                    <label>Google Script URL</label>
+                    <input type="text" id="scriptUrlSetting" placeholder="https://script.google.com/macros/s/..." style="width: 100%;">
+                    <small style="color: #666;">Your Google Apps Script deployment URL</small>
+                </div>
+                <div class="form-row">
+                    <div class="input-group">
+                        <label>Your Name</label>
+                        <input type="text" id="yourNameSetting" placeholder="Your name">
+                    </div>
+                    <div class="input-group">
+                        <label>Partner's Name</label>
+                        <input type="text" id="partnerNameSetting" placeholder="Partner's name">
+                    </div>
+                </div>
+                <button class="btn btn-success" onclick="saveAllSettings()">Update All Settings</button>
             </div>
             
             <div class="card">
@@ -1293,28 +1313,119 @@
         
         // Check if configured
         if (!CONFIG.scriptUrl) {
-            alert('⚠️ Setup Required!\n\n1. Follow the setup guide to create Google Sheet\n2. Deploy the Apps Script\n3. Add your URLs to CONFIG above\n\nSee console for detailed instructions.');
-            console.log(`
-            🚀 QUICK SETUP INSTRUCTIONS:
+            // Show setup wizard instead of console instructions
+            showSetupWizard();
+        }
+        
+        // ===== SETUP WIZARD =====
+        function showSetupWizard() {
+            // Create setup modal
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+            `;
             
-            1. CREATE GOOGLE SHEET:
-               - Go to sheets.google.com
-               - Create new sheet "Family Hub Database"
-               - Add tabs: TimeTracking, Schedule, Activities, ParentEquity, Settings
+            modal.innerHTML = `
+                <div style="background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                    <h2 style="color: #667eea; margin-bottom: 20px;">🚀 Welcome to Family Hub!</h2>
+                    <p style="margin-bottom: 20px;">Let's get you set up in 30 seconds:</p>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">
+                            Step 1: Your Google Script URL
+                        </label>
+                        <input type="text" id="setupScriptUrl" placeholder="https://script.google.com/macros/s/..." 
+                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 5px;">
+                        <small style="color: #666;">This connects to your Google Sheet database</small>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">
+                            Step 2: Nanny's Name
+                        </label>
+                        <input type="text" id="setupNannyName" placeholder="e.g., Sarah" 
+                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">
+                            Step 3: Hourly Rate ($)
+                        </label>
+                        <input type="number" id="setupHourlyRate" placeholder="20" value="20"
+                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">
+                            Step 4: Your Names (Optional)
+                        </label>
+                        <input type="text" id="setupYourName" placeholder="Your name" 
+                               style="width: 48%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-right: 2%;">
+                        <input type="text" id="setupPartnerName" placeholder="Partner's name" 
+                               style="width: 48%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                    </div>
+                    
+                    <button onclick="completeSetup()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 15px 30px; border-radius: 8px; font-size: 1.1em; cursor: pointer; width: 100%; font-weight: bold;">
+                        Complete Setup
+                    </button>
+                    
+                    <div style="margin-top: 20px; padding: 15px; background: #f7fafc; border-radius: 8px;">
+                        <p style="margin: 0; color: #666; font-size: 0.9em;">
+                            <strong>Need your Script URL?</strong><br>
+                            1. Open your Google Sheet<br>
+                            2. Go to Extensions → Apps Script<br>
+                            3. Click Deploy → Manage Deployments<br>
+                            4. Copy the Web App URL
+                        </p>
+                    </div>
+                </div>
+            `;
             
-            2. ADD APPS SCRIPT:
-               - In sheet: Extensions → Apps Script
-               - Paste the backend script from setup guide
-               - Deploy → Web app → Copy URL
+            document.body.appendChild(modal);
+        }
+        
+        function completeSetup() {
+            const scriptUrl = document.getElementById('setupScriptUrl').value;
+            const nannyName = document.getElementById('setupNannyName').value;
+            const hourlyRate = document.getElementById('setupHourlyRate').value;
+            const yourName = document.getElementById('setupYourName').value;
+            const partnerName = document.getElementById('setupPartnerName').value;
             
-            3. UPDATE CONFIG ABOVE:
-               - scriptUrl: 'YOUR_SCRIPT_URL'
-               - sheetId: 'YOUR_SHEET_ID'
-               - yourCalendarId: 'your-email@gmail.com'
-               - partnerCalendarId: 'partner-email@gmail.com'
+            if (!scriptUrl) {
+                alert('Please enter your Google Script URL');
+                return;
+            }
             
-            4. SAVE & REFRESH!
-            `);
+            if (!nannyName) {
+                alert('Please enter your nanny\'s name');
+                return;
+            }
+            
+            // Save all settings
+            localStorage.setItem('scriptUrl', scriptUrl);
+            localStorage.setItem('nannyName', nannyName);
+            localStorage.setItem('hourlyRate', hourlyRate || '20');
+            localStorage.setItem('yourName', yourName || 'You');
+            localStorage.setItem('partnerName', partnerName || 'Partner');
+            
+            // Update CONFIG
+            CONFIG.scriptUrl = scriptUrl;
+            CONFIG.nannyName = nannyName;
+            CONFIG.hourlyRate = parseFloat(hourlyRate) || 20;
+            CONFIG.yourName = yourName || 'You';
+            CONFIG.partnerName = partnerName || 'Partner';
+            
+            alert('✅ Setup complete! Welcome to Family Hub!');
+            location.reload();
         }
         
         // ===== GOOGLE SHEETS INTEGRATION =====
@@ -1375,8 +1486,8 @@
                 case 'activities':
                     await loadActivities();
                     break;
-                case 'equity':
-                    await loadEquityData();
+                case 'settings':
+                    loadSettings();
                     break;
             }
         }
@@ -1805,11 +1916,51 @@ Total: ${totalPay.toFixed(2)}`;
             loadDashboard();
         }
         
+        function saveAllSettings() {
+            // Save all settings including technical ones
+            const scriptUrl = document.getElementById('scriptUrlSetting').value;
+            const yourName = document.getElementById('yourNameSetting').value;
+            const partnerName = document.getElementById('partnerNameSetting').value;
+            
+            if (scriptUrl) {
+                localStorage.setItem('scriptUrl', scriptUrl);
+                CONFIG.scriptUrl = scriptUrl;
+            }
+            
+            if (yourName) {
+                localStorage.setItem('yourName', yourName);
+                CONFIG.yourName = yourName;
+            }
+            
+            if (partnerName) {
+                localStorage.setItem('partnerName', partnerName);
+                CONFIG.partnerName = partnerName;
+            }
+            
+            // Also save the basic settings
+            saveSettings();
+            
+            alert('All settings updated! Refreshing...');
+            location.reload();
+        }
+        
         function loadSettings() {
             // Load saved values into settings form
-            document.getElementById('nannyName').value = CONFIG.nannyName;
-            document.getElementById('hourlyRate').value = CONFIG.hourlyRate;
-            document.getElementById('venmoUsername').value = CONFIG.venmoUsername || '';
+            if (document.getElementById('nannyName')) {
+                document.getElementById('nannyName').value = CONFIG.nannyName;
+                document.getElementById('hourlyRate').value = CONFIG.hourlyRate;
+                document.getElementById('venmoUsername').value = CONFIG.venmoUsername || '';
+            }
+            
+            // Load technical settings
+            if (document.getElementById('scriptUrlSetting')) {
+                document.getElementById('scriptUrlSetting').value = CONFIG.scriptUrl || '';
+                document.getElementById('yourNameSetting').value = CONFIG.yourName || '';
+                document.getElementById('partnerNameSetting').value = CONFIG.partnerName || '';
+            }
+        }
+        function toggleSwitch(element) {
+            element.classList.toggle('active');
         }
         
         function showQuickAdd() {
