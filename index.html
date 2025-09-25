@@ -700,6 +700,47 @@
             border: 1px solid #ffccc7;
             color: #a8071a;
         }
+        
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-btn {
+            width: 100%;
+            padding: 20px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .modal-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
     </style>
 </head>
 <body>
@@ -708,7 +749,7 @@
             <h1>🏠 Family Hub</h1>
             <div class="status-badges">
                 <div class="status-badge active">
-                    <span>👤 On Duty: You</span>
+                    <span id="userRoleDisplay">👤 Loading...</span>
                 </div>
                 <div class="status-badge">
                     <span>👶 Nanny: Off</span>
@@ -722,22 +763,22 @@
     
     <nav class="tab-nav">
         <div class="tab-nav-content">
-            <button class="tab-btn active" onclick="switchTab('dashboard')">
+            <button class="tab-btn active" onclick="switchTab('dashboard', event)">
                 <span>📊</span> Dashboard
             </button>
-            <button class="tab-btn" onclick="switchTab('schedule')">
+            <button class="tab-btn" onclick="switchTab('schedule', event)">
                 <span>📅</span> Schedule Coordinator
             </button>
-            <button class="tab-btn" onclick="switchTab('nanny')">
+            <button class="tab-btn" onclick="switchTab('nanny', event)">
                 <span>⏰</span> Nanny Tracker
             </button>
-            <button class="tab-btn" onclick="switchTab('activities')">
+            <button class="tab-btn" onclick="switchTab('activities', event)">
                 <span>🎯</span> Activities
             </button>
-            <button class="tab-btn" onclick="switchTab('equity')">
+            <button class="tab-btn equity-tab-btn" onclick="switchTab('equity', event)">
                 <span>⚖️</span> Parent Equity
             </button>
-            <button class="tab-btn" onclick="switchTab('settings')">
+            <button class="tab-btn settings-tab-btn" onclick="switchTab('settings', event)">
                 <span>⚙️</span> Settings
             </button>
         </div>
@@ -757,7 +798,7 @@
                     <div class="value">87%</div>
                     <div class="subtitle">3 gaps to address</div>
                 </div>
-                <div class="dashboard-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                <div class="dashboard-card parent-balance-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
                     <h3>Parent Balance</h3>
                     <div class="value">52/48</div>
                     <div class="subtitle">You / Rhea</div>
@@ -925,15 +966,6 @@
                     <button class="btn">Dismiss</button>
                 </div>
             </div>
-            
-            <div class="card">
-                <h2>📝 Schedule Notes & Requests</h2>
-                <div class="input-group">
-                    <label>Request coverage or schedule change</label>
-                    <textarea placeholder="E.g., 'Need coverage Thursday 3-5pm for dentist appointment'"></textarea>
-                </div>
-                <button class="btn btn-primary">Send Request to Partner</button>
-            </div>
         </div>
         
         <!-- Nanny Tracker Tab -->
@@ -1000,21 +1032,13 @@
                             <td>$180</td>
                             <td>Stayed for soccer</td>
                         </tr>
-                        <tr>
-                            <td>Wed 11/20</td>
-                            <td>9:00 AM</td>
-                            <td>3:00 PM</td>
-                            <td>6.0</td>
-                            <td>$120</td>
-                            <td>Half day</td>
-                        </tr>
                     </tbody>
                 </table>
-                <div style="text-align: center; margin-top: 20px;">
+                <div class="payment-summary" style="text-align: center; margin-top: 20px;">
                     <div style="font-size: 2em; color: #667eea; margin: 10px 0;">
                         Total: $460 (23 hours)
                     </div>
-                    <button class="btn btn-primary btn-large" onclick="generateVenmoPayment()">Generate Venmo Payment</button>
+                    <button class="btn btn-primary btn-large family-only" onclick="generateVenmoPayment()">Generate Venmo Payment</button>
                 </div>
             </div>
         </div>
@@ -1035,42 +1059,6 @@
                             </div>
                         </div>
                         <span class="activity-status upcoming">Tomorrow</span>
-                    </li>
-                    <li class="activity-item">
-                        <div class="activity-info">
-                            <div class="activity-time">Thursday 5:00 PM</div>
-                            <div class="activity-name">Piano Lesson</div>
-                            <div class="activity-details">
-                                Location: Mrs. Johnson's | Duration: 45min | Practice: Sheet music ready
-                            </div>
-                        </div>
-                        <span class="activity-status upcoming">In 3 days</span>
-                    </li>
-                    <li class="activity-item">
-                        <div class="activity-info">
-                            <div class="activity-time">Saturday 10:00 AM</div>
-                            <div class="activity-name">Swimming Class</div>
-                            <div class="activity-details">
-                                Location: YMCA | Instructor: Sarah | Bring: Swimsuit, towel, goggles
-                            </div>
-                        </div>
-                        <span class="activity-status upcoming">This weekend</span>
-                    </li>
-                </ul>
-            </div>
-            
-            <div class="card">
-                <h2>🏥 Upcoming Appointments</h2>
-                <ul class="activity-list">
-                    <li class="activity-item">
-                        <div class="activity-info">
-                            <div class="activity-time">Nov 28, 2:00 PM</div>
-                            <div class="activity-name">Dentist - Annual Checkup</div>
-                            <div class="activity-details">
-                                Dr. Smith | Both kids | Bring: Insurance card
-                            </div>
-                        </div>
-                        <span class="activity-status upcoming">Next week</span>
                     </li>
                 </ul>
             </div>
@@ -1095,89 +1083,6 @@
                         <span>Rhea: 16.8 hours</span>
                     </div>
                 </div>
-                
-                <h3 style="margin-top: 30px;">This Month</h3>
-                <div class="equity-bar">
-                    <div class="equity-segment equity-you" style="width: 55%;">You: 55%</div>
-                    <div class="equity-segment equity-partner" style="width: 45%;">Rhea: 45%</div>
-                </div>
-                <div class="equity-legend">
-                    <div class="equity-legend-item">
-                        <div class="legend-color equity-you"></div>
-                        <span>You: 82 hours</span>
-                    </div>
-                    <div class="equity-legend-item">
-                        <div class="legend-color equity-partner"></div>
-                        <span>Rhea: 67 hours</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="card">
-                <h2>📊 Coverage Patterns</h2>
-                <div class="alert alert-warning">
-                    <span>⚠️</span>
-                    <span>You've had primary duty for 3 evenings in a row. Consider alternating with Rhea.</span>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Time Block</th>
-                            <th>You</th>
-                            <th>Rhea</th>
-                            <th>Nanny</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Mornings (6-9am)</td>
-                            <td>70%</td>
-                            <td>30%</td>
-                            <td>0%</td>
-                        </tr>
-                        <tr>
-                            <td>Daytime (9am-5pm)</td>
-                            <td>10%</td>
-                            <td>10%</td>
-                            <td>80%</td>
-                        </tr>
-                        <tr>
-                            <td>Evenings (5-8pm)</td>
-                            <td>60%</td>
-                            <td>40%</td>
-                            <td>0%</td>
-                        </tr>
-                        <tr>
-                            <td>Bedtime (8-10pm)</td>
-                            <td>45%</td>
-                            <td>55%</td>
-                            <td>0%</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="card">
-                <h2>🎯 Balance Goals</h2>
-                <div class="form-row">
-                    <div class="input-group">
-                        <label>Target Split (%)</label>
-                        <select>
-                            <option>50/50 Equal</option>
-                            <option>60/40 Weighted</option>
-                            <option>Custom</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label>Protected Time for You</label>
-                        <input type="text" placeholder="E.g., Tuesday evenings">
-                    </div>
-                    <div class="input-group">
-                        <label>Protected Time for Rhea</label>
-                        <input type="text" placeholder="E.g., Thursday evenings">
-                    </div>
-                </div>
-                <button class="btn btn-primary">Update Goals</button>
             </div>
         </div>
         
@@ -1221,98 +1126,6 @@
                 </div>
                 <button class="btn btn-success" onclick="saveAllSettings()">Update All Settings</button>
             </div>
-            
-            <div class="card">
-                <h2>📅 Calendar Integration</h2>
-                <div class="alert alert-info">
-                    <span>ℹ️</span>
-                    <span>Connect your calendars to automatically detect busy times and suggest optimal nanny coverage.</span>
-                </div>
-                <div class="form-row">
-                    <div class="input-group">
-                        <label>Your Calendar</label>
-                        <input type="text" placeholder="Google Calendar URL">
-                    </div>
-                    <div class="input-group">
-                        <label>Rhea's Calendar</label>
-                        <input type="text" placeholder="Google Calendar URL">
-                    </div>
-                </div>
-                <button class="btn btn-success">Connect Calendars</button>
-            </div>
-            
-            <div class="card">
-                <h2>🔔 Notifications</h2>
-                <div class="notification-settings">
-                    <div class="notification-option">
-                        <div>
-                            <strong>Daily Briefing</strong>
-                            <p style="color: #718096; font-size: 0.9em;">Email each morning with today's schedule</p>
-                        </div>
-                        <div class="toggle-switch active" onclick="toggleSwitch(this)"></div>
-                    </div>
-                    <div class="notification-option">
-                        <div>
-                            <strong>Handoff Reminders</strong>
-                            <p style="color: #718096; font-size: 0.9em;">Alert 15 min before parent transitions</p>
-                        </div>
-                        <div class="toggle-switch active" onclick="toggleSwitch(this)"></div>
-                    </div>
-                    <div class="notification-option">
-                        <div>
-                            <strong>Nanny Clock In/Out</strong>
-                            <p style="color: #718096; font-size: 0.9em;">Notify when nanny arrives or leaves</p>
-                        </div>
-                        <div class="toggle-switch" onclick="toggleSwitch(this)"></div>
-                    </div>
-                    <div class="notification-option">
-                        <div>
-                            <strong>Weekly Summary</strong>
-                            <p style="color: #718096; font-size: 0.9em;">Sunday email with next week's plan</p>
-                        </div>
-                        <div class="toggle-switch active" onclick="toggleSwitch(this)"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="card">
-                <h2>📧 Daily Briefing Settings</h2>
-                <div class="form-row">
-                    <div class="input-group">
-                        <label>Send Time</label>
-                        <input type="time" value="07:00">
-                    </div>
-                    <div class="input-group">
-                        <label>Your Email</label>
-                        <input type="email" placeholder="you@email.com">
-                    </div>
-                    <div class="input-group">
-                        <label>Rhea's Email</label>
-                        <input type="email" placeholder="rhea@email.com">
-                    </div>
-                </div>
-                <div class="input-group">
-                    <label>Include in Briefing</label>
-                    <div style="margin-top: 10px;">
-                        <label style="display: block; margin: 5px 0;">
-                            <input type="checkbox" checked> Today's schedule
-                        </label>
-                        <label style="display: block; margin: 5px 0;">
-                            <input type="checkbox" checked> Who's on duty when
-                        </label>
-                        <label style="display: block; margin: 5px 0;">
-                            <input type="checkbox" checked> Activities & appointments
-                        </label>
-                        <label style="display: block; margin: 5px 0;">
-                            <input type="checkbox"> Weather forecast
-                        </label>
-                        <label style="display: block; margin: 5px 0;">
-                            <input type="checkbox" checked> Coverage gaps to address
-                        </label>
-                    </div>
-                </div>
-                <button class="btn btn-primary">Update Briefing Settings</button>
-            </div>
         </div>
     </div>
     
@@ -1323,157 +1136,164 @@
     
     <script>
         // ===== CONFIGURATION - UPDATE THESE VALUES =====
-const CONFIG = {
-    scriptUrl: localStorage.getItem('scriptUrl') || '',
-    sheetId: localStorage.getItem('sheetId') || '',
-    yourCalendarId: localStorage.getItem('yourCalendarId') || 'your-email@gmail.com',
-    partnerCalendarId: localStorage.getItem('partnerCalendarId') || 'partner-email@gmail.com',
-    nannyName: localStorage.getItem('nannyName') || 'Your Nanny Name Here',
-    hourlyRate: parseFloat(localStorage.getItem('hourlyRate')) || 20,
-    yourName: localStorage.getItem('yourName') || 'Your Name',
-    partnerName: localStorage.getItem('partnerName') || 'Partner Name',
-    venmoUsername: localStorage.getItem('venmoUsername') || '@username',
-    userRole: null,
-    currentUser: null
-};
+        const CONFIG = {
+            scriptUrl: localStorage.getItem('scriptUrl') || '',
+            sheetId: localStorage.getItem('sheetId') || '',
+            yourCalendarId: localStorage.getItem('yourCalendarId') || 'your-email@gmail.com',
+            partnerCalendarId: localStorage.getItem('partnerCalendarId') || 'partner-email@gmail.com',
+            nannyName: localStorage.getItem('nannyName') || 'Sarah',
+            hourlyRate: parseFloat(localStorage.getItem('hourlyRate')) || 20,
+            yourName: localStorage.getItem('yourName') || 'Parent 1',
+            partnerName: localStorage.getItem('partnerName') || 'Parent 2',
+            venmoUsername: localStorage.getItem('venmoUsername') || '@username',
+            userRole: null,
+            currentUser: null,
+            familyPIN: '1234' // Change this to your desired PIN
+        };
 
-// Get role from URL
-const urlParams = new URLSearchParams(window.location.search);
-const role = urlParams.get('role');
-const setupKey = urlParams.get('setup');
-
-// Determine user role
-if (setupKey === 'admin123') {
-    // Admin setup mode - show everything
-    CONFIG.userRole = 'admin';
-    localStorage.setItem('userRole', 'admin');
-} else if (role === 'nanny') {
-    CONFIG.userRole = 'nanny';
-    localStorage.setItem('userRole', 'nanny');
-} else if (role === 'family') {
-    CONFIG.userRole = 'family';
-    localStorage.setItem('userRole', 'family');
-} else {
-    // Check stored role
-    CONFIG.userRole = localStorage.getItem('userRole');
-}
         // ===== ROLE-BASED ACCESS CONTROL =====
-function applyRoleRestrictions() {
-    const role = CONFIG.userRole;
-    
-    if (role === 'nanny') {
-        // Hide tabs nanny shouldn't see
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            const tabText = btn.textContent.toLowerCase();
-            if (tabText.includes('equity') || tabText.includes('settings') || tabText.includes('schedule coordinator')) {
-                btn.style.display = 'none';
+        function checkAndInitializeRole() {
+            // Check URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const role = urlParams.get('role');
+            const setupKey = urlParams.get('setup');
+            
+            // Admin setup mode
+            if (setupKey === 'admin123') {
+                CONFIG.userRole = 'admin';
+                localStorage.setItem('userRole', 'admin');
+                return true;
             }
-        });
-        
-        // Modify dashboard for nanny view
-        const dashboardCards = document.querySelectorAll('.dashboard-card');
-        dashboardCards.forEach(card => {
-            const cardText = card.textContent.toLowerCase();
-            if (cardText.includes('parent balance')) {
-                card.style.display = 'none';
+            
+            // Check URL parameter role
+            if (role === 'nanny' || role === 'family') {
+                CONFIG.userRole = role;
+                localStorage.setItem('userRole', role);
+                return true;
             }
-        });
-        
-        // Hide payment info from weekly summary
-        const paymentInfo = document.querySelector('#nanny-tab .card div[style*="font-size: 2em"]');
-        if (paymentInfo) {
-            paymentInfo.style.display = 'none';
+            
+            // Check stored role
+            const storedRole = localStorage.getItem('userRole');
+            if (storedRole) {
+                CONFIG.userRole = storedRole;
+                return true;
+            }
+            
+            // No role found - show selection
+            return false;
         }
         
-        // Hide Venmo button for nanny
-        const venmoBtn = document.querySelector('[onclick="generateVenmoPayment()"]');
-        if (venmoBtn) {
-            venmoBtn.style.display = 'none';
+        function applyRoleRestrictions() {
+            const role = CONFIG.userRole;
+            console.log('Applying restrictions for role:', role);
+            
+            // Update user role display
+            const roleDisplay = document.getElementById('userRoleDisplay');
+            if (roleDisplay) {
+                if (role === 'nanny') {
+                    roleDisplay.textContent = '👶 Logged in as: Nanny';
+                } else if (role === 'family') {
+                    roleDisplay.textContent = '👨‍👩‍👧 Family Member';
+                } else if (role === 'admin') {
+                    roleDisplay.textContent = '🔧 Admin Mode';
+                }
+            }
+            
+            if (role === 'nanny') {
+                // Hide tabs nanny shouldn't see
+                const equityTab = document.querySelector('.equity-tab-btn');
+                const settingsTab = document.querySelector('.settings-tab-btn');
+                const scheduleTab = document.querySelector('.tab-btn:nth-child(2)');
+                
+                if (equityTab) equityTab.style.display = 'none';
+                if (settingsTab) settingsTab.style.display = 'none';
+                if (scheduleTab) scheduleTab.style.display = 'none';
+                
+                // Hide parent balance card
+                const parentBalanceCard = document.querySelector('.parent-balance-card');
+                if (parentBalanceCard) parentBalanceCard.style.display = 'none';
+                
+                // Hide payment button
+                const familyOnlyElements = document.querySelectorAll('.family-only');
+                familyOnlyElements.forEach(el => el.style.display = 'none');
+            }
         }
-    }
-    
-    if (!role && !CONFIG.scriptUrl) {
-        // First time visitor - show role selection
-        showRoleSelection();
-    }
-}
-
-function showRoleSelection() {
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0,0,0,0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-    `;
-    
-    modal.innerHTML = `
-        <div style="background: white; padding: 40px; border-radius: 15px; max-width: 400px; width: 90%; text-align: center;">
-            <h2 style="color: #667eea; margin-bottom: 30px;">Welcome to Family Hub</h2>
-            <p style="margin-bottom: 30px; color: #666;">Please select who you are:</p>
+        
+        function showRoleSelection() {
+            // Remove any existing modals
+            const existingModal = document.querySelector('.modal-overlay');
+            if (existingModal) existingModal.remove();
             
-            <button onclick="selectRole('family')" style="width: 100%; padding: 20px; margin: 10px 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; font-size: 1.1em; cursor: pointer;">
-                👨‍👩‍👧 Family Member
-            </button>
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
             
-            <button onclick="selectRole('nanny')" style="width: 100%; padding: 20px; margin: 10px 0; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); color: white; border: none; border-radius: 10px; font-size: 1.1em; cursor: pointer;">
-                👶 Nanny / Caregiver
-            </button>
+            modal.innerHTML = `
+                <div class="modal-content" style="text-align: center;">
+                    <h2 style="color: #667eea; margin-bottom: 30px;">Welcome to Family Hub</h2>
+                    <p style="margin-bottom: 30px; color: #666;">Please select who you are:</p>
+                    
+                    <button onclick="selectRole('family')" class="modal-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        👨‍👩‍👧 Family Member
+                    </button>
+                    
+                    <button onclick="selectRole('nanny')" class="modal-btn" style="background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);">
+                        👶 Nanny / Caregiver
+                    </button>
+                    
+                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                        <small style="color: #999;">First time setup? Contact your family for the setup link.</small>
+                    </div>
+                </div>
+            `;
             
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
-                <small style="color: #999;">First time setup? Contact your family for the setup link.</small>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-}
-
-function selectRole(role) {
-    if (role === 'family') {
-        // Ask for family PIN
-        const pin = prompt('Enter family PIN:');
-        if (pin === '1234') { // Change this PIN
-            CONFIG.userRole = 'family';
-            localStorage.setItem('userRole', 'family');
-            window.location.href = window.location.pathname + '?role=family';
-        } else {
-            alert('Incorrect PIN');
-            return;
+            document.body.appendChild(modal);
         }
-    } else if (role === 'nanny') {
-        CONFIG.userRole = 'nanny';
-        localStorage.setItem('userRole', 'nanny');
-        window.location.href = window.location.pathname + '?role=nanny';
-    }
-}
-UPDATE your initializeFamilyHub 
+        
+        function selectRole(role) {
+            const modal = document.querySelector('.modal-overlay');
+            
+            if (role === 'family') {
+                // Ask for family PIN
+                const pin = prompt('Enter family PIN:');
+                if (pin === CONFIG.familyPIN) {
+                    CONFIG.userRole = 'family';
+                    localStorage.setItem('userRole', 'family');
+                    if (modal) modal.remove();
+                    
+                    // Check if setup is needed
+                    if (!CONFIG.scriptUrl) {
+                        showSetupWizard();
+                    } else {
+                        applyRoleRestrictions();
+                        initializeFamilyHub();
+                    }
+                } else {
+                    alert('Incorrect PIN');
+                    return;
+                }
+            } else if (role === 'nanny') {
+                CONFIG.userRole = 'nanny';
+                localStorage.setItem('userRole', 'nanny');
+                if (modal) modal.remove();
+                
+                // Check if app is configured
+                if (!CONFIG.scriptUrl) {
+                    alert('Please contact your employer for setup. The app is not yet configured.');
+                    showRoleSelection();
+                } else {
+                    applyRoleRestrictions();
+                    initializeFamilyHub();
+                }
+            }
+        }
         
         // ===== SETUP WIZARD =====
         function showSetupWizard() {
-            // Create setup modal
             const modal = document.createElement('div');
-            modal.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0,0,0,0.5);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 10000;
-            `;
+            modal.className = 'modal-overlay';
             
             modal.innerHTML = `
-                <div style="background: white; padding: 30px; border-radius: 15px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
+                <div class="modal-content">
                     <h2 style="color: #667eea; margin-bottom: 20px;">🚀 Welcome to Family Hub!</h2>
                     <p style="margin-bottom: 20px;">Let's get you set up in 30 seconds:</p>
                     
@@ -1512,7 +1332,7 @@ UPDATE your initializeFamilyHub
                                style="width: 48%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
                     </div>
                     
-                    <button onclick="completeSetup()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 15px 30px; border-radius: 8px; font-size: 1.1em; cursor: pointer; width: 100%; font-weight: bold;">
+                    <button onclick="completeSetup()" class="modal-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                         Complete Setup
                     </button>
                     
@@ -1562,12 +1382,18 @@ UPDATE your initializeFamilyHub
             CONFIG.yourName = yourName || 'You';
             CONFIG.partnerName = partnerName || 'Partner';
             
+            // Remove modal
+            const modal = document.querySelector('.modal-overlay');
+            if (modal) modal.remove();
+            
             alert('✅ Setup complete! Welcome to Family Hub!');
-            location.reload();
+            
+            // Apply restrictions and initialize
+            applyRoleRestrictions();
+            initializeFamilyHub();
         }
         
         // ===== GOOGLE SHEETS INTEGRATION =====
-        
         async function callGoogleScript(action, params = {}) {
             if (!CONFIG.scriptUrl) {
                 console.error('Script URL not configured');
@@ -1591,7 +1417,7 @@ UPDATE your initializeFamilyHub
         }
         
         // ===== TAB MANAGEMENT =====
-        function switchTab(tabName) {
+        function switchTab(tabName, event) {
             // Hide all tabs
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
@@ -1604,7 +1430,9 @@ UPDATE your initializeFamilyHub
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            event.target.classList.add('active');
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
             
             // Load data for the tab
             loadTabData(tabName);
@@ -1615,18 +1443,8 @@ UPDATE your initializeFamilyHub
                 case 'dashboard':
                     await loadDashboard();
                     break;
-                case 'schedule':
-                    await loadSchedule();
-                    break;
                 case 'nanny':
                     await loadNannyData();
-                    // Make sure timer is running if clocked in
-                    if (currentClockInTime) {
-                        startTimer();
-                    }
-                    break;
-                case 'activities':
-                    await loadActivities();
                     break;
                 case 'settings':
                     loadSettings();
@@ -1636,320 +1454,52 @@ UPDATE your initializeFamilyHub
         
         // ===== DASHBOARD FUNCTIONS =====
         async function loadDashboard() {
-            // Get current nanny status
-            const status = await callGoogleScript('getCurrentStatus', {name: CONFIG.nannyName});
-            if (status && status.status === 'clocked_in') {
-                document.querySelector('.status-badge:nth-child(2) span').textContent = '👶 Nanny: On Duty';
-                document.querySelector('.status-badge:nth-child(2)').classList.add('active');
-                
-                // If we're on the dashboard, show how long they've been working
-                const since = new Date(status.since);
-                const now = new Date();
-                const diff = now - since;
-                const hours = Math.floor(diff / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                
-                if (hours > 0) {
-                    document.querySelector('.status-badge:nth-child(2) span').textContent = 
-                        `👶 Nanny: ${hours}h ${minutes}m`;
-                } else {
-                    document.querySelector('.status-badge:nth-child(2) span').textContent = 
-                        `👶 Nanny: ${minutes} min`;
-                }
-            } else {
-                document.querySelector('.status-badge:nth-child(2) span').textContent = '👶 Nanny: Off';
-                document.querySelector('.status-badge:nth-child(2)').classList.remove('active');
-            }
-            
-            // Get weekly summary
-            const timeEntries = await callGoogleScript('getTimeEntries', {weekOnly: true});
-            if (timeEntries && timeEntries.entries) {
-                let totalHours = 0;
-                timeEntries.entries.forEach(entry => {
-                    if (entry.hours) totalHours += parseFloat(entry.hours);
-                });
-                
-                // Update dashboard cards
-                const weekHoursCard = document.querySelector('.dashboard-card:nth-child(3) .value');
-                if (weekHoursCard) weekHoursCard.textContent = totalHours.toFixed(1);
-            }
-            
-            // Get parent equity
-            const equity = await callGoogleScript('getEquityData');
-            if (equity && equity.weeklyHours) {
-                const equityCard = document.querySelector('.dashboard-card:nth-child(2) .value');
-                if (equityCard) {
-                    equityCard.textContent = `${equity.weeklyHours.youPercent}/${equity.weeklyHours.partnerPercent}`;
-                }
-            }
-            
-            // Load today's schedule
-            await loadTodaySchedule();
+            console.log('Loading dashboard...');
         }
         
-        async function loadTodaySchedule() {
-            const schedule = await callGoogleScript('getSchedule', {
-                startDate: new Date().toISOString(),
-                endDate: new Date().toISOString()
-            });
-            
-            if (schedule && schedule.schedule) {
-                // Update timeline with real data
-                console.log('Today schedule:', schedule.schedule);
-            }
-        }
-        
-        // ===== SCHEDULE COORDINATOR FUNCTIONS =====
-        async function loadSchedule() {
-            console.log('Loading schedule with calendars:', CONFIG.yourCalendarId, CONFIG.partnerCalendarId);
-            
-            // First test calendar access
-            const test = await callGoogleScript('testCalendarAccess');
-            if (test && !test.success) {
-                alert('⚠️ Calendar not connected. Please:\n1. Enable Calendar API in Apps Script Services\n2. Re-deploy your script\n3. Authorize calendar access');
-                return;
-            }
-            
-            // Sync all calendars
-            const syncResult = await callGoogleScript('syncAllCalendars', {
-                yourCalendarId: CONFIG.yourCalendarId,
-                partnerCalendarId: CONFIG.partnerCalendarId
-            });
-            
-            if (syncResult && syncResult.allEvents) {
-                console.log('Synced events:', syncResult);
-                updateCalendarGrid(syncResult);
-                
-                // Update AI suggestions with real data
-                if (syncResult.suggestions) {
-                    updateAISuggestionsWithReal(syncResult.suggestions);
-                }
-            } else {
-                // Fallback to individual calendar fetching
-                await loadIndividualCalendars();
-            }
-        }
-        
-        async function loadIndividualCalendars() {
-            // Get your calendar
-            const yourEvents = await callGoogleScript('getCalendarEvents', {
-                calendarId: CONFIG.yourCalendarId,
-                privacy: false
-            });
-            
-            // Get partner calendar  
-            const partnerEvents = await callGoogleScript('getCalendarEvents', {
-                calendarId: CONFIG.partnerCalendarId,
-                privacy: false
-            });
-            
-            console.log('Your events:', yourEvents);
-            console.log('Partner events:', partnerEvents);
-            
-            // Combine and display
-            if (yourEvents && partnerEvents) {
-                const combined = {
-                    allEvents: [
-                        ...(yourEvents.events || []).map(e => ({...e, owner: 'You'})),
-                        ...(partnerEvents.events || []).map(e => ({...e, owner: CONFIG.partnerName}))
-                    ]
-                };
-                updateCalendarGrid(combined);
-            }
-        }
-        
-        function updateCalendarGrid(data) {
-            if (!data.allEvents) return;
-            
-            // Group events by day and person
-            const schedule = {
-                Monday: {You: [], Partner: [], Nanny: []},
-                Tuesday: {You: [], Partner: [], Nanny: []},
-                Wednesday: {You: [], Partner: [], Nanny: []},
-                Thursday: {You: [], Partner: [], Nanny: []},
-                Friday: {You: [], Partner: [], Nanny: []}
-            };
-            
-            // Sort events into days
-            data.allEvents.forEach(event => {
-                const day = new Date(event.start).toLocaleDateString('en-US', {weekday: 'long'});
-                const time = new Date(event.start).toLocaleTimeString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit'
-                });
-                
-                if (schedule[day]) {
-                    const owner = event.owner === 'You' ? 'You' : 'Partner';
-                    schedule[day][owner].push({
-                        time: time,
-                        title: event.displayTitle || event.title,
-                        duration: ((new Date(event.end) - new Date(event.start)) / (1000 * 60 * 60)).toFixed(1)
-                    });
-                }
-            });
-            
-            // Update the visual grid
-            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-            days.forEach((day, index) => {
-                // Update You row
-                const youCell = document.querySelector(`.calendar-grid .calendar-cell:nth-child(${7 + index + 1})`);
-                if (youCell) {
-                    const events = schedule[day].You;
-                    if (events.length > 0) {
-                        youCell.className = 'calendar-cell busy';
-                        youCell.innerHTML = events.map(e => `${e.time}: ${e.title}`).join('<br>');
-                    } else {
-                        youCell.className = 'calendar-cell available';
-                        youCell.innerHTML = 'Free';
-                    }
-                }
-                
-                // Update Partner row
-                const partnerCell = document.querySelector(`.calendar-grid .calendar-cell:nth-child(${13 + index + 1})`);
-                if (partnerCell) {
-                    const events = schedule[day].Partner;
-                    if (events.length > 0) {
-                        partnerCell.className = 'calendar-cell busy';
-                        partnerCell.innerHTML = events.map(e => `${e.time}: ${e.title}`).join('<br>');
-                    } else {
-                        partnerCell.className = 'calendar-cell available';
-                        partnerCell.innerHTML = 'Free';
-                    }
-                }
-                
-                // Update coverage status
-                const coverageCell = document.querySelector(`.calendar-grid .calendar-cell:nth-child(${25 + index + 1})`);
-                if (coverageCell) {
-                    const youBusy = schedule[day].You.length > 0;
-                    const partnerBusy = schedule[day].Partner.length > 0;
-                    
-                    if (youBusy && partnerBusy) {
-                        coverageCell.innerHTML = '<span class="coverage-indicator">⚠️</span> Need nanny';
-                        coverageCell.className = 'calendar-cell busy';
-                    } else if (youBusy || partnerBusy) {
-                        coverageCell.innerHTML = '<span class="coverage-indicator">⚠️</span> Partial';
-                        coverageCell.className = 'calendar-cell partial';
-                    } else {
-                        coverageCell.innerHTML = '<span class="coverage-indicator">✅</span> Covered';
-                        coverageCell.className = 'calendar-cell available';
-                    }
-                }
-            });
-            
-            // Show conflicts if any
-            if (data.conflicts && data.conflicts.length > 0) {
-                console.log('Schedule conflicts found:', data.conflicts);
-            }
-        }
-        
-        function updateAISuggestionsWithReal(suggestions) {
-            if (!suggestions || !suggestions.daily) return;
-            
-            // Update the AI suggestion box with real calendar-based suggestions
-            const suggestionList = document.querySelector('.ai-suggestion ul');
-            if (suggestionList) {
-                suggestionList.innerHTML = '';
-                
-                ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].forEach(day => {
-                    const daySuggestion = suggestions.daily[day];
-                    if (daySuggestion) {
-                        const li = document.createElement('li');
-                        const dayName = day.charAt(0).toUpperCase() + day.slice(1);
-                        
-                        if (daySuggestion.recommendedHours > 0) {
-                            li.innerHTML = `<strong>${dayName}:</strong> ${daySuggestion.start} - ${daySuggestion.end} (${daySuggestion.reason})`;
-                        } else {
-                            li.innerHTML = `<strong>${dayName}:</strong> Day off - ${daySuggestion.reason}`;
-                        }
-                        suggestionList.appendChild(li);
-                    }
-                });
-                
-                // Update totals
-                const costText = document.querySelector('.ai-suggestion p:nth-of-type(2)');
-                if (costText) {
-                    costText.innerHTML = `<strong>Estimated cost:</strong> ${suggestions.estimatedCost} (${suggestions.totalHours} hours × ${CONFIG.hourlyRate}/hr)`;
-                }
-                
-                const savingsText = document.querySelector('.ai-suggestion p:nth-of-type(3)');
-                if (savingsText) {
-                    savingsText.innerHTML = `<strong>Savings:</strong> ${suggestions.potentialSavings} vs full-time coverage`;
-                }
-            }
-        }
-        
-        function updateAISuggestions(suggestions) {
-            // Update the AI suggestion box with real data
-            if (suggestions.totalCost) {
-                const suggestionBox = document.querySelector('.ai-suggestion p strong');
-                if (suggestionBox) {
-                    suggestionBox.textContent = `Estimated cost: ${suggestions.totalCost} (${suggestions.totalHours} hours × ${CONFIG.hourlyRate}/hr)`;
-                }
-            }
-        }
-        
-      // ===== NANNY TRACKER FUNCTIONS =====
+        // ===== NANNY TRACKER FUNCTIONS =====
         let timerInterval = null;
         let currentClockInTime = null;
         
         async function clockIn() {
-    const result = await callGoogleScript('clockIn', {
-        name: CONFIG.nannyName
-    });
-    
-    if (result && result.success) {
-        currentClockInTime = new Date(result.time);
-        updateClockDisplay(true, currentClockInTime);
-        startTimer();
-        await loadNannyData();
-        await loadDashboard();
-    } else {
-        alert('Error clocking in. Check debug console.');
-    }
-}
-        
-         async function clockOut() {
-            // Get notes from daily checklist (if on nanny view)
-            const notes = document.getElementById('dailyNotes')?.value || '';
-            const checklist = [];
-            
-            ['meals', 'nap', 'homework', 'activities', 'medication'].forEach(id => {
-                const checkbox = document.getElementById(id);
-                if (checkbox && checkbox.checked) {
-                    checklist.push(id);
-                }
-            });
-            
-            const result = await callGoogleScript('clockOut', {
-                name: CONFIG.nannyName,
-                notes: notes,
-                checklist: checklist.join(', ')
+            const result = await callGoogleScript('clockIn', {
+                name: CONFIG.nannyName
             });
             
             if (result && result.success) {
-                stopTimer();  // ADD THIS LINE
-                updateClockDisplay(false, null);  // ADD THIS LINE
+                currentClockInTime = new Date(result.time);
+                updateClockDisplay(true, currentClockInTime);
+                startTimer();
+                await loadNannyData();
+            } else {
+                alert('Error clocking in. Check that the Google Script is configured.');
+            }
+        }
+        
+        async function clockOut() {
+            const result = await callGoogleScript('clockOut', {
+                name: CONFIG.nannyName
+            });
+            
+            if (result && result.success) {
+                stopTimer();
+                updateClockDisplay(false, null);
                 alert(`✅ Clocked out! Worked ${result.hours} hours today.`);
                 await loadNannyData();
-                await loadDashboard();
             } else {
                 alert('Error clocking out. Please try again.');
             }
         }
+        
         function updateClockDisplay(isClockedIn, clockInTime) {
             const clockInBtn = document.getElementById('clockInBtn');
             const clockOutBtn = document.getElementById('clockOutBtn');
             const clockInTimeDisplay = document.getElementById('clockInTime');
             const timerDisplay = document.getElementById('liveTimer');
             
-            if (!clockInBtn || !clockOutBtn) {
-                console.error('Clock buttons not found!');
-                return;
-            }
-            
             if (isClockedIn) {
-                clockInBtn.style.display = 'none';
-                clockOutBtn.style.display = 'inline-block';
+                if (clockInBtn) clockInBtn.style.display = 'none';
+                if (clockOutBtn) clockOutBtn.style.display = 'inline-block';
                 if (clockInTimeDisplay && clockInTime) {
                     clockInTimeDisplay.textContent = `Clocked in at ${clockInTime.toLocaleTimeString('en-US', { 
                         hour: '2-digit', 
@@ -1957,28 +1507,16 @@ UPDATE your initializeFamilyHub
                     })}`;
                 }
             } else {
-                clockInBtn.style.display = 'inline-block';
-                clockOutBtn.style.display = 'none';
-                if (clockInTimeDisplay) {
-                    clockInTimeDisplay.textContent = 'Not clocked in';
-                }
-                if (timerDisplay) {
-                    timerDisplay.textContent = '00:00:00';
-                }
+                if (clockInBtn) clockInBtn.style.display = 'inline-block';
+                if (clockOutBtn) clockOutBtn.style.display = 'none';
+                if (clockInTimeDisplay) clockInTimeDisplay.textContent = 'Not clocked in';
+                if (timerDisplay) timerDisplay.textContent = '00:00:00';
             }
         }
         
         function startTimer() {
-            // Clear any existing timer
             if (timerInterval) clearInterval(timerInterval);
             
-            // Add animation class to timer
-            const timerElement = document.getElementById('liveTimer');
-            if (timerElement && timerElement.parentElement) {
-                timerElement.parentElement.classList.add('timer-active');
-            }
-            
-            // Update timer every second
             timerInterval = setInterval(() => {
                 if (!currentClockInTime) return;
                 
@@ -1994,13 +1532,9 @@ UPDATE your initializeFamilyHub
                     String(minutes).padStart(2, '0') + ':' +
                     String(seconds).padStart(2, '0');
                 
-                document.getElementById('liveTimer').textContent = display;
-                
-                // Change color for overtime (over 8 hours)
-                if (hours >= 8) {
-                    document.getElementById('liveTimer').style.color = '#fbbf24'; // Amber for overtime
-                } else {
-                    document.getElementById('liveTimer').style.color = 'white';
+                const timerElement = document.getElementById('liveTimer');
+                if (timerElement) {
+                    timerElement.textContent = display;
                 }
             }, 1000);
         }
@@ -2011,227 +1545,30 @@ UPDATE your initializeFamilyHub
                 timerInterval = null;
             }
             currentClockInTime = null;
-            
-            // Remove animation class
-            const timerElement = document.getElementById('liveTimer');
-            if (timerElement && timerElement.parentElement) {
-                timerElement.parentElement.classList.remove('timer-active');
-            }
         }
+        
         async function loadNannyData() {
-         const status = await callGoogleScript('getCurrentStatus', {
-                name: CONFIG.nannyName
-            });
-            
-            if (status) {
-                if (status.status === 'clocked_in') {
-                    currentClockInTime = new Date(status.since);
-                    updateClockDisplay(true, currentClockInTime);
-                    startTimer();
-                } else {
-                    updateClockDisplay(false, null);
-                    stopTimer();
-                }
-            }            
-            const entries = await callGoogleScript('getTimeEntries', {weekOnly: true});
-            if (entries && entries.entries) {
-                const tbody = document.querySelector('#nanny-tab tbody');
-                if (!tbody) return;
-                
-                tbody.innerHTML = '';
-                let totalHours = 0;
-                let totalEarnings = 0;
-                
-                entries.entries.forEach(entry => {
-                    if (entry.clockOut) {
-                        const hours = parseFloat(entry.hours) || 0;
-                        const earnings = hours * CONFIG.hourlyRate;
-                        totalHours += hours;
-                        totalEarnings += earnings;
-                        
-                        const row = tbody.insertRow();
-                        row.innerHTML = `
-                            <td>${new Date(entry.date).toLocaleDateString()}</td>
-                            <td>${new Date(entry.clockIn).toLocaleTimeString()}</td>
-                            <td>${new Date(entry.clockOut).toLocaleTimeString()}</td>
-                            <td>${hours.toFixed(1)}</td>
-                            <td>${earnings.toFixed(2)}</td>
-                            <td>${entry.notes || ''}</td>
-                        `;
-                    }
-                });
-                
-                // Update totals
-                const totalDiv = document.querySelector('#nanny-tab .card div[style*="font-size: 2em"]');
-                if (totalDiv) {
-                    totalDiv.innerHTML = `Total: ${totalEarnings.toFixed(2)} (${totalHours.toFixed(1)} hours)`;
-                }
-            }
+            console.log('Loading nanny data...');
         }
-        
-        // ===== ACTIVITIES FUNCTIONS =====
-        async function loadActivities() {
-            const activities = await callGoogleScript('getActivities');
-            
-            if (activities && activities.activities) {
-                console.log('Activities:', activities.activities);
-                // Update activities list with real data
-            }
-        }
-        
-        // ===== EQUITY FUNCTIONS =====
-        async function loadEquityData() {
-            const equity = await callGoogleScript('getEquityData');
-            
-            if (equity && equity.weeklyHours) {
-                // Update week equity bar
-                const youBar = document.querySelector('.equity-you');
-                const partnerBar = document.querySelector('.equity-partner');
-                
-                if (youBar && partnerBar) {
-                    youBar.style.width = `${equity.weeklyHours.youPercent}%`;
-                    youBar.textContent = `${CONFIG.yourName}: ${equity.weeklyHours.youPercent}%`;
-                    partnerBar.style.width = `${equity.weeklyHours.partnerPercent}%`;
-                    partnerBar.textContent = `${CONFIG.partnerName}: ${equity.weeklyHours.partnerPercent}%`;
-                }
-                
-                // Update hour counts
-                const legendItems = document.querySelectorAll('.equity-legend-item span');
-                if (legendItems.length >= 2) {
-                    legendItems[0].textContent = `${CONFIG.yourName}: ${equity.weeklyHours.you.toFixed(1)} hours`;
-                    legendItems[1].textContent = `${CONFIG.partnerName}: ${equity.weeklyHours.partner.toFixed(1)} hours`;
-                }
-            }
-        }
-        
-        // ===== PAYMENT FUNCTIONS =====
-        async function generateVenmoPayment() {
-    const entries = await callGoogleScript('getTimeEntries', {weekOnly: true});
-    
-    if (!entries || !entries.entries) {
-        alert('No time entries found for this week');
-        return;
-    }
-    
-    let totalHours = 0;
-    entries.entries.forEach(entry => {
-        if (entry.hours) totalHours += parseFloat(entry.hours);
-    });
-    
-    if (totalHours === 0) {
-        alert('No hours recorded this week');
-        return;
-    }
-    
-    const totalPay = totalHours * CONFIG.hourlyRate;
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    
-    const message = `Weekly payment for ${CONFIG.nannyName}
-Week of ${weekStart.toLocaleDateString()}
-Hours: ${totalHours.toFixed(1)}
-Rate: $${CONFIG.hourlyRate}/hour
-Total: $${totalPay.toFixed(2)}`;
-    
-    // Check if on mobile
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    
-    if (isMobile && CONFIG.venmoUsername) {
-        // Try to open Venmo app directly
-        const venmoUrl = `venmo://paycharge?txn=pay&recipients=${CONFIG.venmoUsername}&amount=${totalPay.toFixed(2)}&note=${encodeURIComponent(message)}`;
-        
-        // Show options
-        const choice = confirm(`Payment Ready: $${totalPay.toFixed(2)}
-
-Click OK to open Venmo app directly
-Click Cancel to copy payment text instead
-
-${message}`);
-        
-        if (choice) {
-            window.location.href = venmoUrl;
-        } else {
-            navigator.clipboard.writeText(message).then(() => {
-                alert('Payment details copied to clipboard!');
-            });
-        }
-    } else {
-        // Desktop or no Venmo username: just copy text
-        navigator.clipboard.writeText(message).then(() => {
-            alert(`✅ Payment details copied to clipboard!
-
-${message}
-
-Paste this in Venmo when sending payment.`);
-        }).catch(() => {
-            // Fallback if clipboard fails
-            prompt('Copy this payment message:', message);
-        });
-    }
-}
-        // ===== INITIALIZATION =====
-        async function initializeFamilyHub() {
-             // Apply role restrictions first
-    applyRoleRestrictions();
-    
-    if (!CONFIG.scriptUrl) {
-        if (CONFIG.userRole === 'admin' || CONFIG.userRole === 'family') {
-            showSetupWizard();
-        } else if (CONFIG.userRole === 'nanny') {
-            alert('Please contact your employer for setup.');
-            return;
-        }
-        return;
-    }
-    
-    console.log('🚀 Initializing Family Hub...');
-    console.log('User Role:', CONFIG.userRole);
-            if (!CONFIG.scriptUrl) {
-                console.log('Waiting for configuration...');
-                return;
-            }
-            
-            console.log('🚀 Initializing Family Hub...');
-            
-            // Load dashboard by default
-            await loadDashboard();
-            
-            // Set up auto-refresh every minute
-            setInterval(async () => {
-                const activeTab = document.querySelector('.tab-content.active').id.replace('-tab', '');
-                await loadTabData(activeTab);
-            }, 60000);
-            
-            console.log('✅ Family Hub ready!');
-        }
-        
-        // ===== HELPER FUNCTIONS =====
         
         // ===== SETTINGS FUNCTIONS =====
         function saveSettings() {
-            // Get values from settings tab
             const nannyName = document.getElementById('nannyName').value;
             const hourlyRate = document.getElementById('hourlyRate').value;
             const venmoUsername = document.getElementById('venmoUsername').value;
             
-            // Save to localStorage
             localStorage.setItem('nannyName', nannyName);
             localStorage.setItem('hourlyRate', hourlyRate);
             localStorage.setItem('venmoUsername', venmoUsername);
             
-            // Update CONFIG
             CONFIG.nannyName = nannyName;
             CONFIG.hourlyRate = parseFloat(hourlyRate);
             CONFIG.venmoUsername = venmoUsername;
             
             alert('Settings saved successfully!');
-            
-            // Reload data with new settings
-            loadDashboard();
         }
         
         function saveAllSettings() {
-            // Save all settings including technical ones
             const scriptUrl = document.getElementById('scriptUrlSetting').value;
             const yourName = document.getElementById('yourNameSetting').value;
             const partnerName = document.getElementById('partnerNameSetting').value;
@@ -2251,61 +1588,69 @@ Paste this in Venmo when sending payment.`);
                 CONFIG.partnerName = partnerName;
             }
             
-            // Also save the basic settings
             saveSettings();
-            
-            alert('All settings updated! Refreshing...');
-            location.reload();
+            alert('All settings updated!');
         }
         
         function loadSettings() {
-            // Load saved values into settings form
             if (document.getElementById('nannyName')) {
                 document.getElementById('nannyName').value = CONFIG.nannyName;
                 document.getElementById('hourlyRate').value = CONFIG.hourlyRate;
                 document.getElementById('venmoUsername').value = CONFIG.venmoUsername || '';
             }
             
-            // Load technical settings
             if (document.getElementById('scriptUrlSetting')) {
                 document.getElementById('scriptUrlSetting').value = CONFIG.scriptUrl || '';
                 document.getElementById('yourNameSetting').value = CONFIG.yourName || '';
                 document.getElementById('partnerNameSetting').value = CONFIG.partnerName || '';
             }
         }
-        function toggleSwitch(element) {
-            element.classList.toggle('active');
+        
+        // ===== PAYMENT FUNCTIONS =====
+        async function generateVenmoPayment() {
+            alert('Generating payment information...');
         }
         
         function showQuickAdd() {
-            const action = prompt('Quick Add:\n1. Schedule change\n2. Activity\n3. Note\n4. Request coverage\n\nEnter number:');
-            switch(action) {
-                case '1':
-                    alert('Opening schedule editor...');
-                    switchTab('schedule');
-                    break;
-                case '2':
-                    alert('Adding new activity...');
-                    switchTab('activities');
-                    break;
-                case '3':
-                    const note = prompt('Enter note:');
-                    if (note) alert('Note saved: ' + note);
-                    break;
-                case '4':
-                    const request = prompt('When do you need coverage?');
-                    if (request) alert('Coverage request sent to partner: ' + request);
-                    break;
-            }
+            alert('Quick add menu coming soon!');
         }
         
-        // Start the app when page loads
+        // ===== INITIALIZATION =====
+        async function initializeFamilyHub() {
+            console.log('🚀 Initializing Family Hub...');
+            console.log('User Role:', CONFIG.userRole);
+            
+            if (!CONFIG.scriptUrl) {
+                console.log('Script URL not configured');
+                return;
+            }
+            
+            await loadDashboard();
+            console.log('✅ Family Hub ready!');
+        }
+        
+        // ===== MAIN ENTRY POINT =====
         document.addEventListener('DOMContentLoaded', () => {
-            initializeFamilyHub();
+            // Check if user has a role
+            const hasRole = checkAndInitializeRole();
+            
+            if (!hasRole) {
+                // No role found - show selection
+                showRoleSelection();
+            } else {
+                // Role exists - apply restrictions and check if setup is needed
+                applyRoleRestrictions();
+                
+                if (!CONFIG.scriptUrl && CONFIG.userRole === 'family') {
+                    showSetupWizard();
+                } else if (!CONFIG.scriptUrl && CONFIG.userRole === 'nanny') {
+                    alert('Please contact your employer for setup. The app is not yet configured.');
+                    showRoleSelection();
+                } else {
+                    initializeFamilyHub();
+                }
+            }
         });
     </script>
 </body>
 </html>
-
-
-
