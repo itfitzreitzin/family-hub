@@ -1323,23 +1323,137 @@
     
     <script>
         // ===== CONFIGURATION - UPDATE THESE VALUES =====
-        const CONFIG = {
-            scriptUrl: localStorage.getItem('scriptUrl') || '', // Your Google Apps Script URL
-            sheetId: localStorage.getItem('sheetId') || '', // Your Google Sheet ID
-            yourCalendarId: localStorage.getItem('yourCalendarId') || 'your-email@gmail.com',
-            partnerCalendarId: localStorage.getItem('partnerCalendarId') || 'partner-email@gmail.com',
-            nannyName: localStorage.getItem('nannyName') || 'Your Nanny Name Here',
-            hourlyRate: parseFloat(localStorage.getItem('hourlyRate')) || 20,
-            yourName: localStorage.getItem('yourName') || 'Your Name',
-            partnerName: localStorage.getItem('partnerName') || 'Partner Name',
-            venmoUsername: localStorage.getItem('venmoUsername') || '@username'
-        };
+const CONFIG = {
+    scriptUrl: localStorage.getItem('scriptUrl') || '',
+    sheetId: localStorage.getItem('sheetId') || '',
+    yourCalendarId: localStorage.getItem('yourCalendarId') || 'your-email@gmail.com',
+    partnerCalendarId: localStorage.getItem('partnerCalendarId') || 'partner-email@gmail.com',
+    nannyName: localStorage.getItem('nannyName') || 'Your Nanny Name Here',
+    hourlyRate: parseFloat(localStorage.getItem('hourlyRate')) || 20,
+    yourName: localStorage.getItem('yourName') || 'Your Name',
+    partnerName: localStorage.getItem('partnerName') || 'Partner Name',
+    venmoUsername: localStorage.getItem('venmoUsername') || '@username',
+    userRole: null,
+    currentUser: null
+};
+
+// Get role from URL
+const urlParams = new URLSearchParams(window.location.search);
+const role = urlParams.get('role');
+const setupKey = urlParams.get('setup');
+
+// Determine user role
+if (setupKey === 'admin123') {
+    // Admin setup mode - show everything
+    CONFIG.userRole = 'admin';
+    localStorage.setItem('userRole', 'admin');
+} else if (role === 'nanny') {
+    CONFIG.userRole = 'nanny';
+    localStorage.setItem('userRole', 'nanny');
+} else if (role === 'family') {
+    CONFIG.userRole = 'family';
+    localStorage.setItem('userRole', 'family');
+} else {
+    // Check stored role
+    CONFIG.userRole = localStorage.getItem('userRole');
+}
+        // ===== ROLE-BASED ACCESS CONTROL =====
+function applyRoleRestrictions() {
+    const role = CONFIG.userRole;
+    
+    if (role === 'nanny') {
+        // Hide tabs nanny shouldn't see
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            const tabText = btn.textContent.toLowerCase();
+            if (tabText.includes('equity') || tabText.includes('settings') || tabText.includes('schedule coordinator')) {
+                btn.style.display = 'none';
+            }
+        });
         
-        // Check if configured
-        if (!CONFIG.scriptUrl) {
-            // Show setup wizard instead of console instructions
-            showSetupWizard();
+        // Modify dashboard for nanny view
+        const dashboardCards = document.querySelectorAll('.dashboard-card');
+        dashboardCards.forEach(card => {
+            const cardText = card.textContent.toLowerCase();
+            if (cardText.includes('parent balance')) {
+                card.style.display = 'none';
+            }
+        });
+        
+        // Hide payment info from weekly summary
+        const paymentInfo = document.querySelector('#nanny-tab .card div[style*="font-size: 2em"]');
+        if (paymentInfo) {
+            paymentInfo.style.display = 'none';
         }
+        
+        // Hide Venmo button for nanny
+        const venmoBtn = document.querySelector('[onclick="generateVenmoPayment()"]');
+        if (venmoBtn) {
+            venmoBtn.style.display = 'none';
+        }
+    }
+    
+    if (!role && !CONFIG.scriptUrl) {
+        // First time visitor - show role selection
+        showRoleSelection();
+    }
+}
+
+function showRoleSelection() {
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    `;
+    
+    modal.innerHTML = `
+        <div style="background: white; padding: 40px; border-radius: 15px; max-width: 400px; width: 90%; text-align: center;">
+            <h2 style="color: #667eea; margin-bottom: 30px;">Welcome to Family Hub</h2>
+            <p style="margin-bottom: 30px; color: #666;">Please select who you are:</p>
+            
+            <button onclick="selectRole('family')" style="width: 100%; padding: 20px; margin: 10px 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; font-size: 1.1em; cursor: pointer;">
+                👨‍👩‍👧 Family Member
+            </button>
+            
+            <button onclick="selectRole('nanny')" style="width: 100%; padding: 20px; margin: 10px 0; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); color: white; border: none; border-radius: 10px; font-size: 1.1em; cursor: pointer;">
+                👶 Nanny / Caregiver
+            </button>
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+                <small style="color: #999;">First time setup? Contact your family for the setup link.</small>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function selectRole(role) {
+    if (role === 'family') {
+        // Ask for family PIN
+        const pin = prompt('Enter family PIN:');
+        if (pin === '1234') { // Change this PIN
+            CONFIG.userRole = 'family';
+            localStorage.setItem('userRole', 'family');
+            window.location.href = window.location.pathname + '?role=family';
+        } else {
+            alert('Incorrect PIN');
+            return;
+        }
+    } else if (role === 'nanny') {
+        CONFIG.userRole = 'nanny';
+        localStorage.setItem('userRole', 'nanny');
+        window.location.href = window.location.pathname + '?role=nanny';
+    }
+}
+UPDATE your initializeFamilyHub 
         
         // ===== SETUP WIZARD =====
         function showSetupWizard() {
@@ -2057,6 +2171,21 @@ Paste this in Venmo when sending payment.`);
 }
         // ===== INITIALIZATION =====
         async function initializeFamilyHub() {
+             // Apply role restrictions first
+    applyRoleRestrictions();
+    
+    if (!CONFIG.scriptUrl) {
+        if (CONFIG.userRole === 'admin' || CONFIG.userRole === 'family') {
+            showSetupWizard();
+        } else if (CONFIG.userRole === 'nanny') {
+            alert('Please contact your employer for setup.');
+            return;
+        }
+        return;
+    }
+    
+    console.log('🚀 Initializing Family Hub...');
+    console.log('User Role:', CONFIG.userRole);
             if (!CONFIG.scriptUrl) {
                 console.log('Waiting for configuration...');
                 return;
@@ -2177,5 +2306,6 @@ Paste this in Venmo when sending payment.`);
     </script>
 </body>
 </html>
+
 
 
