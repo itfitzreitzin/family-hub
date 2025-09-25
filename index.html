@@ -1774,22 +1774,27 @@
             }
         }
         
-        // ===== NANNY TRACKER FUNCTIONS =====
-        async function clockIn() {
-            const result = await callGoogleScript('clockIn', {
-                name: CONFIG.nannyName
-            });
-            
-            if (result && result.success) {
-                alert(`✅ Clocked in at ${new Date(result.time).toLocaleTimeString()}`);
-                await loadNannyData();
-                await loadDashboard();
-            } else {
-                alert('Error clocking in. Please try again.');
-            }
-        }
+      / ===== NANNY TRACKER FUNCTIONS =====
+        let timerInterval = null;
+        let currentClockInTime = null;
         
-        async function clockOut() {
+        async function clockIn() {
+    const result = await callGoogleScript('clockIn', {
+        name: CONFIG.nannyName
+    });
+    
+    if (result && result.success) {
+        currentClockInTime = new Date(result.time);
+        updateClockDisplay(true, currentClockInTime);
+        startTimer();
+        await loadNannyData();
+        await loadDashboard();
+    } else {
+        alert('Error clocking in. Check debug console.');
+    }
+}
+        
+         async function clockOut() {
             // Get notes from daily checklist (if on nanny view)
             const notes = document.getElementById('dailyNotes')?.value || '';
             const checklist = [];
@@ -1808,6 +1813,8 @@
             });
             
             if (result && result.success) {
+                stopTimer();  // ADD THIS LINE
+                updateClockDisplay(false, null);  // ADD THIS LINE
                 alert(`✅ Clocked out! Worked ${result.hours} hours today.`);
                 await loadNannyData();
                 await loadDashboard();
@@ -1815,10 +1822,104 @@
                 alert('Error clocking out. Please try again.');
             }
         }
-        
-        async function loadNannyData() {
-            const entries = await callGoogleScript('getTimeEntries', {weekOnly: true});
+        function updateClockDisplay(isClockedIn, clockInTime) {
+            const clockInBtn = document.getElementById('clockInBtn');
+            const clockOutBtn = document.getElementById('clockOutBtn');
+            const clockInTimeDisplay = document.getElementById('clockInTime');
+            const timerDisplay = document.getElementById('liveTimer');
             
+            if (!clockInBtn || !clockOutBtn) {
+                console.error('Clock buttons not found!');
+                return;
+            }
+            
+            if (isClockedIn) {
+                clockInBtn.style.display = 'none';
+                clockOutBtn.style.display = 'inline-block';
+                if (clockInTimeDisplay && clockInTime) {
+                    clockInTimeDisplay.textContent = `Clocked in at ${clockInTime.toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                    })}`;
+                }
+            } else {
+                clockInBtn.style.display = 'inline-block';
+                clockOutBtn.style.display = 'none';
+                if (clockInTimeDisplay) {
+                    clockInTimeDisplay.textContent = 'Not clocked in';
+                }
+                if (timerDisplay) {
+                    timerDisplay.textContent = '00:00:00';
+                }
+            }
+        }
+        
+        function startTimer() {
+            // Clear any existing timer
+            if (timerInterval) clearInterval(timerInterval);
+            
+            // Add animation class to timer
+            const timerElement = document.getElementById('liveTimer');
+            if (timerElement && timerElement.parentElement) {
+                timerElement.parentElement.classList.add('timer-active');
+            }
+            
+            // Update timer every second
+            timerInterval = setInterval(() => {
+                if (!currentClockInTime) return;
+                
+                const now = new Date();
+                const diff = now - currentClockInTime;
+                
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                
+                const display = 
+                    String(hours).padStart(2, '0') + ':' +
+                    String(minutes).padStart(2, '0') + ':' +
+                    String(seconds).padStart(2, '0');
+                
+                document.getElementById('liveTimer').textContent = display;
+                
+                // Change color for overtime (over 8 hours)
+                if (hours >= 8) {
+                    document.getElementById('liveTimer').style.color = '#fbbf24'; // Amber for overtime
+                } else {
+                    document.getElementById('liveTimer').style.color = 'white';
+                }
+            }, 1000);
+        }
+        
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            currentClockInTime = null;
+            
+            // Remove animation class
+            const timerElement = document.getElementById('liveTimer');
+            if (timerElement && timerElement.parentElement) {
+                timerElement.parentElement.classList.remove('timer-active');
+            }
+        }
+        async function loadNannyData() {
+         const status = await callGoogleScript('getCurrentStatus', {
+                name: CONFIG.nannyName
+            });
+            
+            if (status) {
+                if (status.status === 'clocked_in') {
+                    currentClockInTime = new Date(status.since);
+                    updateClockDisplay(true, currentClockInTime);
+                    startTimer();
+                } else {
+                    updateClockDisplay(false, null);
+                    stopTimer();
+                }
+            }            
+            const entries = await callGoogleScript('getTimeEntries', {weekOnly: true});
             if (entries && entries.entries) {
                 const tbody = document.querySelector('#nanny-tab tbody');
                 if (!tbody) return;
@@ -2076,3 +2177,4 @@ Paste this in Venmo when sending payment.`);
     </script>
 </body>
 </html>
+
