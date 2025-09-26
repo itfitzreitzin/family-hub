@@ -1458,10 +1458,14 @@ async function initializeApp() {
     }
     
     // 4. Initialize the app
+    await syncClockFromServer(); 
     await loadDashboard();
     console.log('✅ Family Hub ready!');
 }
-
+setInterval(syncClockFromServer, 60000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) syncClockFromServer();
+});
 // ===== SAVE SETTINGS TO SHEETS ONLY =====
 async function saveSettings() {
     const settings = {
@@ -1641,6 +1645,7 @@ async function callGoogleScript(action, params = {}) {
             switch(tabName) {
                 case 'dashboard':
                     await loadDashboard();
+                    await syncClockFromServer(); 
                     break;
                 case 'nanny':
                     await loadNannyData();
@@ -1651,10 +1656,48 @@ async function callGoogleScript(action, params = {}) {
                     break;
             }
         }
-        
+    // === Dashboard nanny badge helper ===
+        let dashboardBadgeInterval = null;
+
+async function refreshDashboardNannyBadge() {
+  const badgeWrap = document.querySelector('.status-badges');
+  const nannyBadge = badgeWrap?.querySelector('.status-badge:nth-child(2)'); // "👶 Nanny: ..."
+  if (!nannyBadge) return;
+
+  const status = await callGoogleScript('getCurrentStatus', { name: CONFIG.nannyName });
+
+  // clear old ticker if any
+  if (dashboardBadgeInterval) {
+    clearInterval(dashboardBadgeInterval);
+    dashboardBadgeInterval = null;
+  }
+
+  if (status?.status === 'clocked_in' && status.since) {
+    const since = new Date(status.since);
+    nannyBadge.classList.add('active');
+
+    // initial render
+    const updateText = () => {
+      const now = new Date();
+      const diffMs = now - since;
+      const h = Math.floor(diffMs / (1000*60*60));
+      const m = Math.floor((diffMs % (1000*60*60)) / (1000*60));
+      nannyBadge.querySelector('span').textContent =
+        h > 0 ? `👶 Nanny: ${h}h ${m}m` : `👶 Nanny: ${m} min`;
+    };
+    updateText();
+
+    // tick every minute on dashboard (we don’t need per-second here)
+    dashboardBadgeInterval = setInterval(updateText, 60000);
+  } else {
+    nannyBadge.classList.remove('active');
+    nannyBadge.querySelector('span').textContent = '👶 Nanny: Off';
+  }
+}
         // ===== DASHBOARD FUNCTIONS =====
         async function loadDashboard() {
             console.log('Loading dashboard...');
+            await refreshDashboardNannyBadge();
         }
         
         // ===== NANNY TRACKER FUNCTIONS =====
@@ -2075,6 +2118,7 @@ function getWeekStatusBadge(isPaid) {
     </script>
 </body>
 </html>
+
 
 
 
