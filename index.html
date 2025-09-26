@@ -1546,11 +1546,52 @@
             }
             currentClockInTime = null;
         }
-        
-        async function loadNannyData() {
-            console.log('Loading nanny data...');
-        }
-        
+        async function loadJSON(action, params = {}) {
+  const url = new URL(CONFIG.scriptUrl);
+  url.searchParams.set('action', action);
+  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k, v));
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
+     async function loadNannyData() {
+  // 1) Get this week’s time entries for display (optional)
+  const entriesRes = await loadJSON('getTimeEntries', { weekOnly: 'true' });
+
+  // 2) Recompute weekly totals & earnings in UI
+  const weekly = (await loadJSON('getEquityData'))?.weeklyHours;
+
+  // Re-render the totals on the page
+  if (weekly) {
+    const hourly = CONFIG.hourlyRate || 20;
+    const nannyTotalHours = (entriesRes?.entries || [])
+      .filter(e => e.type === 'Clock Out') // count rows that have hours
+      .reduce((sum, e) => sum + (parseFloat(e.hours)||0), 0);
+
+    // Update the big “Total: $… (… hours)” display
+    const paymentSummary = document.querySelector('.payment-summary div');
+    if (paymentSummary) {
+      const dollars = (nannyTotalHours * hourly).toFixed(2);
+      paymentSummary.textContent = `Total: $${dollars} (${nannyTotalHours.toFixed(1)} hours)`;
+    }
+
+    // Update the equity bar widths + legend if present
+    const youSeg = document.querySelector('.equity-segment.equity-you');
+    const partnerSeg = document.querySelector('.equity-segment.equity-partner');
+    const legend = document.querySelectorAll('.equity-legend span');
+
+    if (youSeg && partnerSeg) {
+      youSeg.style.width = `${weekly.youPercent}%`;
+      youSeg.textContent = `You: ${weekly.youPercent}%`;
+      partnerSeg.style.width = `${weekly.partnerPercent}%`;
+      partnerSeg.textContent = `Rhea: ${weekly.partnerPercent}%`;
+    }
+    if (legend?.length >= 2) {
+      legend[0].textContent = `You: ${weekly.you.toFixed(1)} hours`;
+      legend[1].textContent = `Rhea: ${weekly.partner.toFixed(1)} hours`;
+    }
+  }
+}
         // ===== SETTINGS FUNCTIONS =====
         function saveSettings() {
             const nannyName = document.getElementById('nannyName').value;
@@ -1654,3 +1695,4 @@
     </script>
 </body>
 </html>
+
