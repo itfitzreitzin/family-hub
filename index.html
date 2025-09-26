@@ -5,112 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Family Hub - Household Coordination System</title>
     <style>
-        /* -----------------------------=== Import Pixel Font ===----------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-
-body {
-  font-family: 'Press Start 2P', cursive;
-  font-size: 12px;
-  background: #88c070; /* Game Boy green vibe */
-  color: black;
-  text-transform: uppercase;
-}
-
-/* === Cards === */
-.card {
-  border: 4px solid black;
-  border-radius: 0; /* no rounded edges */
-  box-shadow: none;
-  background: #c0f0c0;
-  padding: 16px;
-  margin-bottom: 12px;
-}
-
-/* === Header === */
-.header {
-  background: #2b2b2b;
-  color: #fff;
-  border-bottom: 4px solid black;
-}
-
-.header h1 {
-  font-size: 14px;
-  text-shadow: 2px 2px 0 #000;
-}
-
-/* === Tabs === */
-.tab-btn {
-  border: 2px solid black;
-  background: #eee;
-  font-size: 10px;
-  padding: 8px 12px;
-  margin-right: 2px;
-}
-.tab-btn.active {
-  background: #ffcc00;
-  color: black;
-  box-shadow: inset 2px 2px 0 #000;
-}
-
-/* === Buttons === */
-.btn {
-  font-family: 'Press Start 2P', cursive;
-  border: 3px solid black;
-  border-radius: 0;
-  padding: 8px 12px;
-  background: #ff5555;
-  color: #fff;
-  text-transform: uppercase;
-}
-.btn:hover {
-  background: #ff7777;
-  transform: translateY(-2px);
-}
-
-/* === Dashboard Cards === */
-.dashboard-card {
-  border: 4px solid black;
-  border-radius: 0;
-  background: #77aaff;
-  color: white;
-  font-size: 10px;
-}
-.dashboard-card .value {
-  font-size: 18px;
-  color: yellow;
-  text-shadow: 1px 1px 0 black;
-}
-
-/* === Tables === */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 10px;
-}
-th, td {
-  border: 2px solid black;
-  padding: 4px;
-  text-align: left;
-}
-th {
-  background: #444;
-  color: #fff;
-}
-tr:nth-child(even) td {
-  background: #d0ffd0;
-}
-
-/* === Pixel badges === */
-.status-badge {
-  border: 2px solid black;
-  padding: 4px 8px;
-  background: #ffcc00;
-  font-size: 8px;
-}
-.status-badge.active {
-  background: #55ff55;
-}
-/*==========================================================*/
         * {
             margin: 0;
             padding: 0;
@@ -1141,10 +1035,29 @@ tr:nth-child(even) td {
                     </tbody>
                 </table>
                 <div class="card">
-                    <h2>💰 Payment History</h2>
-                    <div id="paymentHistory">
-                        <!-- History loads here -->
-                    </div>
+                  <h2>💰 Payment History</h2>
+                
+                  <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+                    <select id="phStatus" class="btn" style="background:#f7fafc; color:#4a5568;">
+                      <option value="all">All</option>
+                      <option value="paid">Paid</option>
+                      <option value="unpaid">Unpaid</option>
+                    </select>
+                    <select id="phPageSize" class="btn" style="background:#f7fafc; color:#4a5568;">
+                      <option>10</option><option selected>20</option><option>50</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="loadPaymentHistoryUI()">Refresh</button>
+                    <div id="phSummary" style="margin-left:auto; color:#667eea;"></div>
+                  </div>
+                
+                  <div id="paymentHistory" style="overflow-x:auto;">
+                    <div class="loading">Loading payment history...</div>
+                  </div>
+                
+                  <div id="phPager" style="display:flex; justify-content:space-between; margin-top:10px;">
+                    <button class="btn" id="phPrev" onclick="phPrevPage()">← Prev</button>
+                    <button class="btn" id="phNext" onclick="phNextPage()">Next →</button>
+                  </div>
                 </div>
                 <div class="payment-summary" style="text-align: center; margin-top: 20px;">
                     <div id="weeklyTotal" style="font-size: 2em; color: #667eea; margin: 10px 0;">
@@ -1267,6 +1180,149 @@ const CONFIG = {
     userRole: null
 };
 
+let PH_STATE = { page: 1, pageSize: 20, status: 'all', total: 0 };
+
+function phFmt(n){ return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n||0); }
+function phBadge(paid){
+  return paid
+    ? '<span style="background:#48bb78;color:white;padding:4px 10px;border-radius:999px;font-size:.8em;">Paid</span>'
+    : '<span style="background:#f56565;color:white;padding:4px 10px;border-radius:999px;font-size:.8em;">Unpaid</span>';
+}
+
+async function loadPaymentHistoryUI() {
+  // read controls
+  const statusEl = document.getElementById('phStatus');
+  const sizeEl   = document.getElementById('phPageSize');
+  PH_STATE.status   = (statusEl?.value || 'all').toLowerCase();
+  PH_STATE.pageSize = parseInt(sizeEl?.value || '20', 10);
+  PH_STATE.page     = Math.max(1, PH_STATE.page);
+
+  const resp = await callGoogleScript('getPaymentHistory', {
+    status: PH_STATE.status,
+    limit: String(PH_STATE.pageSize),
+    page: String(PH_STATE.page)
+  });
+
+  const container = document.getElementById('paymentHistory');
+  const summary   = document.getElementById('phSummary');
+
+  if (!resp || !Array.isArray(resp.payments)) {
+    container.innerHTML = '<p style="color:#666;">No payment history.</p>';
+    summary.textContent = '';
+    return;
+  }
+
+  PH_STATE.total = resp.total || 0;
+
+  // Build table
+  let html = `
+  <table style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th>Week</th>
+        <th>Status</th>
+        <th>Hours</th>
+        <th>Amount</th>
+        <th>Paid Date</th>
+        <th>Method</th>
+        <th>Ref</th>
+        <th style="text-align:right;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+  `;
+
+  let subtotal = 0, subhours = 0;
+  resp.payments.forEach(p => {
+    const paidDate = p.paidDate ? new Date(p.paidDate).toLocaleDateString() : '—';
+    html += `
+      <tr>
+        <td>${p.weekLabel}</td>
+        <td>${phBadge(p.isPaid)}</td>
+        <td>${(p.hours||0).toFixed(1)}</td>
+        <td>${phFmt(p.amount||0)}</td>
+        <td>${paidDate}</td>
+        <td>${p.method||'—'}</td>
+        <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.reference||'—'}</td>
+        <td style="text-align:right;">
+          ${p.isPaid ? `
+            <button class="btn" onclick="phEditRef('${p.weekStart}','${p.nanny||''}','${p.reference||''}')">Edit ref</button>
+            <button class="btn btn-warning" onclick="phUnmarkPaid('${p.weekStart}','${p.nanny||''}')">Mark Unpaid</button>
+          ` : `—`}
+        </td>
+      </tr>
+    `;
+    subtotal += p.amount||0;
+    subhours += p.hours||0;
+  });
+
+  html += `
+    </tbody>
+  </table>
+  <div style="margin-top:10px; text-align:right; color:#4a5568;">
+    Page subtotal: <strong>${phFmt(subtotal)}</strong> · ${subhours.toFixed(1)} hrs
+  </div>`;
+
+  container.innerHTML = html;
+
+  const first = (PH_STATE.page - 1) * PH_STATE.pageSize + 1;
+  const last  = Math.min(PH_STATE.page * PH_STATE.pageSize, PH_STATE.total);
+  summary.textContent = PH_STATE.total
+    ? `Showing ${first}–${last} of ${PH_STATE.total}`
+    : '';
+
+  // pager buttons
+  document.getElementById('phPrev').disabled = PH_STATE.page <= 1;
+  document.getElementById('phNext').disabled = last >= PH_STATE.total;
+}
+
+function phPrevPage(){ if (PH_STATE.page > 1){ PH_STATE.page--; loadPaymentHistoryUI(); } }
+function phNextPage(){
+  const maxPage = Math.ceil(PH_STATE.total / PH_STATE.pageSize);
+  if (PH_STATE.page < maxPage){ PH_STATE.page++; loadPaymentHistoryUI(); }
+}
+
+async function phUnmarkPaid(weekStartISO, nannyName) {
+  if (!confirm('Mark this week as UNPAID?')) return;
+  const res = await callGoogleScript('unmarkWeekPaid', {
+    weekStart: new Date(weekStartISO).toISOString(),
+    nannyName: nannyName || CONFIG.nannyName
+  });
+  if (res?.success) {
+    await loadNannyData();     // refresh PAID state on the main card
+    await loadPaymentHistoryUI();
+  } else {
+    alert(res?.message || 'Could not unmark');
+  }
+}
+
+async function phEditRef(weekStartISO, nannyName, currentRef) {
+  const reference = prompt('Edit payment reference:', currentRef || '') || '';
+  // lightweight: redo markWeekPaid with same amounts/hours? or just update row?
+  // For now, re-mark with same hours/amount from week totals:
+  const ws = new Date(weekStartISO);
+  ws.setHours(0,0,0,0);
+  // pull week totals quickly from entries
+  const r = await callGoogleScript('getTimeEntries', { weekOnly:'true', name: nannyName || CONFIG.nannyName });
+  const hours = (r?.entries||[]).filter(e => e.clockOut)
+    .reduce((s,e)=>s+(parseFloat(e.hours)||0),0);
+  const total = hours * (Number(CONFIG.hourlyRate)||20);
+  const res = await callGoogleScript('markWeekPaid', {
+    weekStart: ws.toISOString(),
+    nannyName: nannyName || CONFIG.nannyName,
+    hours: hours.toFixed(2),
+    amount: total.toFixed(2),
+    method: 'Venmo',
+    reference
+  });
+  if (res?.success) {
+    await loadNannyData();
+    await loadPaymentHistoryUI();
+  } else {
+    alert('Could not update reference');
+  }
+}
+        
 // ===== NO MORE LOCALSTORAGE - EVERYTHING FROM SHEETS =====
 async function initializeApp() {
     // 1. Determine role from URL
@@ -1514,6 +1570,7 @@ async function callGoogleScript(action, params = {}) {
                     break;
                 case 'nanny':
                     await loadNannyData();
+                    await loadPaymentHistoryUI(); // ← add this
                     break;
                 case 'settings':
                     loadSettings();
@@ -1985,6 +2042,7 @@ async function initializeFamilyHub() {
     </script>
 </body>
 </html>
+
 
 
 
