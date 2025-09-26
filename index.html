@@ -1663,7 +1663,7 @@ async function callGoogleScript(action, params = {}) {
             }
         }
         
-        // ===== PAYMENT FUNCTIONS =====
+// ===== PAYMENT FUNCTIONS =====
 async function generateVenmoPayment() {
   try {
     if (!CONFIG.scriptUrl) {
@@ -1671,22 +1671,25 @@ async function generateVenmoPayment() {
       return;
     }
 
-    const handle = sanitizeVenmo(raw); // removes leading @
+    // 1) Read & validate Venmo handle
     const raw = (CONFIG.venmoUsername || '').trim();
+    const handle = sanitizeVenmo(raw); // removes leading @
 
-// Block the placeholder or empty handle
-if (!raw || /^@?username$/i.test(raw)) {
-  alert('Set your real Venmo Username in Settings (e.g., @nickreitzin), then try again.');
-  return;
-const rate = Number(CONFIG.hourlyRate) || 20;
-    // pull this week's entries for THIS nanny
+    // Block placeholder or empty handle
+    if (!raw || /^@?username$/i.test(raw)) {
+      alert('Set your real Venmo Username in Settings (e.g., @nickreitzin), then try again.');
+      return;
+    }
+
+    // 2) Pull this week's entries for THIS nanny
+    const rate = Number(CONFIG.hourlyRate) || 20;
     const res = await callGoogleScript('getTimeEntries', { weekOnly: true, name: CONFIG.nannyName });
     const entries = res?.entries || [];
 
     // only completed shifts
     const done = entries.filter(e => e.clockOut);
-
     const hours = done.reduce((sum, e) => sum + (parseFloat(e.hours) || 0), 0);
+
     if (!hours) {
       alert('No completed hours recorded this week.');
       return;
@@ -1694,11 +1697,11 @@ const rate = Number(CONFIG.hourlyRate) || 20;
 
     const total = +(hours * rate).toFixed(2);
 
-    // week-of label (Sunday 00:00)
+    // 3) Build week-of label (Sunday 00:00)
     const d = new Date();
     const weekStart = new Date(d);
     weekStart.setDate(d.getDate() - d.getDay());
-    weekStart.setHours(0,0,0,0);
+    weekStart.setHours(0, 0, 0, 0);
 
     const note =
 `Weekly payment for ${CONFIG.nannyName}
@@ -1707,9 +1710,9 @@ Hours: ${hours.toFixed(1)}
 Rate: ${fmtUSD(rate)}/hour
 Total: ${fmtUSD(total)}`;
 
+    // 4) Mobile → open Venmo app; else → copy note
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-    // Mobile + venmo handle → open Venmo
     if (isMobile && handle) {
       const venmoUrl =
         `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(handle)}` +
@@ -1724,19 +1727,19 @@ Total: ${fmtUSD(total)}`;
       // fall through to copy
     }
 
-    // Desktop or no handle → copy message
+    // Desktop or canceled: copy details
     try {
       await navigator.clipboard.writeText(note);
       alert(`✅ Payment details copied to clipboard.\n\n${note}\n\nPaste into Venmo when sending.`);
     } catch {
-      // ultra fallback
-      prompt('Copy this payment message:', note);
+      prompt('Copy this payment message:', note); // ultra-fallback
     }
   } catch (err) {
     console.error('generateVenmoPayment error:', err);
     alert('Could not generate the Venmo payment. Open the console for details.');
   }
 }
+
 
         // ===== INITIALIZATION =====
         async function initializeFamilyHub() {
@@ -1777,6 +1780,7 @@ Total: ${fmtUSD(total)}`;
     </script>
 </body>
 </html>
+
 
 
 
