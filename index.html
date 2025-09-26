@@ -1281,268 +1281,97 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('⚠️ App not configured!\n\n1. Edit index.html on GitHub\n2. Replace YOUR_ACTUAL_SCRIPT_ID_HERE with your Google Script ID\n3. Commit and push changes');
     }
 });
-        // ===== ROLE-BASED ACCESS CONTROL =====
-        function checkAndInitializeRole() {
-            // Check URL parameters
-            const urlParams = new URLSearchParams(window.location.search);
-            const role = urlParams.get('role');
-            const setupKey = urlParams.get('setup');
-            
-            // Admin setup mode
-            if (setupKey === 'admin123') {
-                CONFIG.userRole = 'admin';
-                localStorage.setItem('userRole', 'admin');
-                return true;
-            }
-            
-            // Check URL parameter role
-            if (role === 'nanny' || role === 'family') {
-                CONFIG.userRole = role;
-                localStorage.setItem('userRole', role);
-                return true;
-            }
-            
-            // Check stored role
-            const storedRole = localStorage.getItem('userRole');
-            if (storedRole) {
-                CONFIG.userRole = storedRole;
-                return true;
-            }
-            
-            // No role found - show selection
-            return false;
+   
+// ===== ROLE-BASED ACCESS CONTROL =====
+function applyRoleRestrictions() {
+    const role = CONFIG.userRole;
+    console.log('Applying restrictions for role:', role);
+    
+    // Update user role display
+    const roleDisplay = document.getElementById('userRoleDisplay');
+    if (roleDisplay) {
+        if (role === 'nanny') {
+            roleDisplay.textContent = '👶 Logged in as: Nanny';
+        } else if (role === 'family') {
+            roleDisplay.textContent = '👨‍👩‍👧 Family Member';
+        } else if (role === 'admin') {
+            roleDisplay.textContent = '🔧 Admin Mode';
         }
+    }
+    
+    if (role === 'nanny') {
+        // Hide tabs nanny shouldn't see
+        const equityTab = document.querySelector('.equity-tab-btn');
+        const settingsTab = document.querySelector('.settings-tab-btn');
+        const scheduleTab = document.querySelector('.tab-btn:nth-child(2)');
         
-        function applyRoleRestrictions() {
-            const role = CONFIG.userRole;
-            console.log('Applying restrictions for role:', role);
-            
-            // Update user role display
-            const roleDisplay = document.getElementById('userRoleDisplay');
-            if (roleDisplay) {
-                if (role === 'nanny') {
-                    roleDisplay.textContent = '👶 Logged in as: Nanny';
-                } else if (role === 'family') {
-                    roleDisplay.textContent = '👨‍👩‍👧 Family Member';
-                } else if (role === 'admin') {
-                    roleDisplay.textContent = '🔧 Admin Mode';
-                }
-            }
-            
-            if (role === 'nanny') {
-                // Hide tabs nanny shouldn't see
-                const equityTab = document.querySelector('.equity-tab-btn');
-                const settingsTab = document.querySelector('.settings-tab-btn');
-                const scheduleTab = document.querySelector('.tab-btn:nth-child(2)');
-                
-                if (equityTab) equityTab.style.display = 'none';
-                if (settingsTab) settingsTab.style.display = 'none';
-                if (scheduleTab) scheduleTab.style.display = 'none';
-                
-                // Hide parent balance card
-                const parentBalanceCard = document.querySelector('.parent-balance-card');
-                if (parentBalanceCard) parentBalanceCard.style.display = 'none';
-                
-                // Hide payment button
-                const familyOnlyElements = document.querySelectorAll('.family-only');
-                familyOnlyElements.forEach(el => el.style.display = 'none');
-            }
-        }
+        if (equityTab) equityTab.style.display = 'none';
+        if (settingsTab) settingsTab.style.display = 'none';
+        if (scheduleTab) scheduleTab.style.display = 'none';
         
-        function showRoleSelection() {
-            // Remove any existing modals
-            const existingModal = document.querySelector('.modal-overlay');
-            if (existingModal) existingModal.remove();
-            
-            const modal = document.createElement('div');
-            modal.className = 'modal-overlay';
-            
-            modal.innerHTML = `
-                <div class="modal-content" style="text-align: center;">
-                    <h2 style="color: #667eea; margin-bottom: 30px;">Welcome to Family Hub</h2>
-                    <p style="margin-bottom: 30px; color: #666;">Please select who you are:</p>
-                    
-                    <button onclick="selectRole('family')" class="modal-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                        👨‍👩‍👧 Family Member
-                    </button>
-                    
-                    <button onclick="selectRole('nanny')" class="modal-btn" style="background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);">
-                        👶 Nanny / Caregiver
-                    </button>
-                    
-                    <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
-                        <small style="color: #999;">First time setup? Contact your family for the setup link.</small>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(modal);
-        }
+        // Hide parent balance card
+        const parentBalanceCard = document.querySelector('.parent-balance-card');
+        if (parentBalanceCard) parentBalanceCard.style.display = 'none';
         
-        function selectRole(role) {
-            const modal = document.querySelector('.modal-overlay');
-            
-            if (role === 'family') {
-                // Ask for family PIN
-                const pin = prompt('Enter family PIN:');
-                if (pin === CONFIG.familyPIN) {
-                    CONFIG.userRole = 'family';
-                    localStorage.setItem('userRole', 'family');
-                    if (modal) modal.remove();
-                    
-                    // Check if setup is needed
-                    if (!CONFIG.scriptUrl) {
-                        showSetupWizard();
-                    } else {
-                        applyRoleRestrictions();
-                        initializeFamilyHub();
-                    }
-                } else {
-                    alert('Incorrect PIN');
-                    return;
-                }
-            } else if (role === 'nanny') {
-                CONFIG.userRole = 'nanny';
-                localStorage.setItem('userRole', 'nanny');
-                if (modal) modal.remove();
-                
-                // Check if app is configured
-                if (!CONFIG.scriptUrl) {
-                    alert('Please contact your employer for setup. The app is not yet configured.');
-                    showRoleSelection();
-                } else {
-                    applyRoleRestrictions();
-                    initializeFamilyHub();
-                }
-            }
-        }
-        
-        // ===== SETUP WIZARD =====
-        function showSetupWizard() {
-            const modal = document.createElement('div');
-            modal.className = 'modal-overlay';
-            
-            modal.innerHTML = `
-                <div class="modal-content">
-                    <h2 style="color: #667eea; margin-bottom: 20px;">🚀 Welcome to Family Hub!</h2>
-                    <p style="margin-bottom: 20px;">Let's get you set up in 30 seconds:</p>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">
-                            Step 1: Your Google Script URL
-                        </label>
-                        <input type="text" id="setupScriptUrl" placeholder="https://script.google.com/macros/s/..." 
-                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 5px;">
-                        <small style="color: #666;">This connects to your Google Sheet database</small>
-                    </div>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">
-                            Step 2: Nanny's Name
-                        </label>
-                        <input type="text" id="setupNannyName" placeholder="e.g., Sarah" 
-                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
-                    </div>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">
-                            Step 3: Hourly Rate ($)
-                        </label>
-                        <input type="number" id="setupHourlyRate" placeholder="20" value="20"
-                               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
-                    </div>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">
-                            Step 4: Your Names (Optional)
-                        </label>
-                        <input type="text" id="setupYourName" placeholder="Your name" 
-                               style="width: 48%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-right: 2%;">
-                        <input type="text" id="setupPartnerName" placeholder="Partner's name" 
-                               style="width: 48%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
-                    </div>
-                    
-                    <button onclick="completeSetup()" class="modal-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                        Complete Setup
-                    </button>
-                    
-                    <div style="margin-top: 20px; padding: 15px; background: #f7fafc; border-radius: 8px;">
-                        <p style="margin: 0; color: #666; font-size: 0.9em;">
-                            <strong>Need your Script URL?</strong><br>
-                            1. Open your Google Sheet<br>
-                            2. Go to Extensions → Apps Script<br>
-                            3. Click Deploy → Manage Deployments<br>
-                            4. Copy the Web App URL
-                        </p>
-                    </div>
-                </div>
-            `;
-            
-            document.body.appendChild(modal);
-        }
-        
-        function completeSetup() {
-            const scriptUrl = document.getElementById('setupScriptUrl').value;
-            const nannyName = document.getElementById('setupNannyName').value;
-            const hourlyRate = document.getElementById('setupHourlyRate').value;
-            const yourName = document.getElementById('setupYourName').value;
-            const partnerName = document.getElementById('setupPartnerName').value;
-            
-            if (!scriptUrl) {
-                alert('Please enter your Google Script URL');
-                return;
-            }
-            
-            if (!nannyName) {
-                alert('Please enter your nanny\'s name');
-                return;
-            }
-            
-            // Save all settings
-            localStorage.setItem('scriptUrl', scriptUrl);
-            localStorage.setItem('nannyName', nannyName);
-            localStorage.setItem('hourlyRate', hourlyRate || '20');
-            localStorage.setItem('yourName', yourName || 'You');
-            localStorage.setItem('partnerName', partnerName || 'Partner');
-            
-            // Update CONFIG
-            CONFIG.scriptUrl = scriptUrl;
-            CONFIG.nannyName = nannyName;
-            CONFIG.hourlyRate = parseFloat(hourlyRate) || 20;
-            CONFIG.yourName = yourName || 'You';
-            CONFIG.partnerName = partnerName || 'Partner';
-            
-            // Remove modal
-            const modal = document.querySelector('.modal-overlay');
-            if (modal) modal.remove();
-            
-            alert('✅ Setup complete! Welcome to Family Hub!');
-            
-            // Apply restrictions and initialize
-            applyRoleRestrictions();
-            initializeFamilyHub();
-        }
-        
-        // ===== GOOGLE SHEETS INTEGRATION =====
-async function callGoogleScript(action, params = {}) {
-  if (!CONFIG.scriptUrl) {
-    console.error('Script URL not configured');
-    return null;
-  }
-
-  const url = new URL(CONFIG.scriptUrl);
-  url.searchParams.append('action', action);
-  Object.keys(params).forEach(k => url.searchParams.append(k, params[k]));
-  url.searchParams.append('_ts', Date.now()); // cache-buster ✅
-
-  try {
-    const res = await fetch(url.toString()); // simple GET
-    return await res.json();
-  } catch (err) {
-    console.error('Error calling script:', err);
-    return null;
-  }
+        // Hide payment button
+        const familyOnlyElements = document.querySelectorAll('.family-only');
+        familyOnlyElements.forEach(el => el.style.display = 'none');
+    }
 }
+
+function showRoleSelection() {
+    const existingModal = document.querySelector('.modal-overlay');
+    if (existingModal) existingModal.remove();
+    
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="text-align: center;">
+            <h2 style="color: #667eea; margin-bottom: 30px;">Welcome to Family Hub</h2>
+            <p style="margin-bottom: 30px; color: #666;">Please select who you are:</p>
+            
+            <button onclick="window.location.href='?role=family'" class="modal-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                👨‍👩‍👧 Family Member
+            </button>
+            
+            <button onclick="window.location.href='?role=nanny'" class="modal-btn" style="background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);">
+                👶 Nanny / Caregiver
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function showSetupWizard() {
+    alert('Go to Settings tab to configure the app');
+    switchTab('settings', null);
+}
+
+// ===== GOOGLE SHEETS INTEGRATION =====
+async function callGoogleScript(action, params = {}) {
+    if (!CONFIG.scriptUrl) {
+        console.error('Script URL not configured');
+        return null;
+    }
+
+    const url = new URL(CONFIG.scriptUrl);
+    url.searchParams.append('action', action);
+    Object.keys(params).forEach(k => url.searchParams.append(k, params[k]));
+    url.searchParams.append('_ts', Date.now());
+
+    try {
+        const res = await fetch(url.toString());
+        return await res.json();
+    } catch (err) {
+        console.error('Error calling script:', err);
+        return null;
+    }
+}
+
+// Continue with the rest of your functions (switchTab, loadDashboard, etc.)
+// But DELETE the duplicate initialization at the end
 
         // ===== TAB MANAGEMENT =====
         function switchTab(tabName, event) {
@@ -1916,6 +1745,7 @@ async function initializeFamilyHub() {
     </script>
 </body>
 </html>
+
 
 
 
