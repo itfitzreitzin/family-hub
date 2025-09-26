@@ -1038,9 +1038,9 @@
                     <div id="weeklyTotal" style="font-size: 2em; color: #667eea; margin: 10px 0;">
                           Total: $0.00 (0.0 hours)
                     </div>
-                    <button class="btn btn-primary btn-large family-only" 
+                    <button id="payBtn" class="btn btn-primary btn-large family-only" 
                             onclick="generateVenmoPaymentWithTracking()">
-                     Generate Venmo Payment
+                        Generate Venmo Payment
                     </button>
                 </div>
             </div>
@@ -1366,76 +1366,6 @@ function phNextPage(){
 }
 
 
-  PH_STATE.total = resp.total || 0;
-
-  // Build table
-  let html = `
-  <table style="width:100%; border-collapse:collapse;">
-    <thead>
-      <tr>
-        <th>Week</th>
-        <th>Status</th>
-        <th>Hours</th>
-        <th>Amount</th>
-        <th>Paid Date</th>
-        <th>Method</th>
-        <th>Ref</th>
-        <th style="text-align:right;">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-  `;
-
-  let subtotal = 0, subhours = 0;
-  resp.payments.forEach(p => {
-    const paidDate = p.paidDate ? new Date(p.paidDate).toLocaleDateString() : '—';
-    html += `
-      <tr>
-        <td>${p.weekLabel}</td>
-        <td>${phBadge(p.isPaid)}</td>
-        <td>${(p.hours||0).toFixed(1)}</td>
-        <td>${phFmt(p.amount||0)}</td>
-        <td>${paidDate}</td>
-        <td>${p.method||'—'}</td>
-        <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.reference||'—'}</td>
-        <td style="text-align:right;">
-          ${p.isPaid ? `
-            <button class="btn" onclick="phEditRef('${p.weekStart}','${p.nanny||''}','${p.reference||''}')">Edit ref</button>
-            <button class="btn btn-warning" onclick="phUnmarkPaid('${p.weekStart}','${p.nanny||''}')">Mark Unpaid</button>
-          ` : `—`}
-        </td>
-      </tr>
-    `;
-    subtotal += p.amount||0;
-    subhours += p.hours||0;
-  });
-
-  html += `
-    </tbody>
-  </table>
-  <div style="margin-top:10px; text-align:right; color:#4a5568;">
-    Page subtotal: <strong>${phFmt(subtotal)}</strong> · ${subhours.toFixed(1)} hrs
-  </div>`;
-
-  container.innerHTML = html;
-
-  const first = (PH_STATE.page - 1) * PH_STATE.pageSize + 1;
-  const last  = Math.min(PH_STATE.page * PH_STATE.pageSize, PH_STATE.total);
-  summary.textContent = PH_STATE.total
-    ? `Showing ${first}–${last} of ${PH_STATE.total}`
-    : '';
-
-  // pager buttons
-  document.getElementById('phPrev').disabled = PH_STATE.page <= 1;
-  document.getElementById('phNext').disabled = last >= PH_STATE.total;
-}
-
-function phPrevPage(){ if (PH_STATE.page > 1){ PH_STATE.page--; loadPaymentHistoryUI(); } }
-function phNextPage(){
-  const maxPage = Math.ceil(PH_STATE.total / PH_STATE.pageSize);
-  if (PH_STATE.page < maxPage){ PH_STATE.page++; loadPaymentHistoryUI(); }
-}
-
 async function phUnmarkPaid(weekStartISO, nannyName) {
   if (!confirm('Mark this week as UNPAID?')) return;
   const res = await callGoogleScript('unmarkWeekPaid', {
@@ -1697,24 +1627,14 @@ async function callGoogleScript(action, params = {}) {
 
         // ===== TAB MANAGEMENT =====
         function switchTab(tabName, event) {
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            // Show selected tab
-            document.getElementById(tabName + '-tab').classList.add('active');
-            
-            // Update nav
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            if (event && event.target) {
-                event.target.classList.add('active');
-            }
-            
-            // Load data for the tab
-            loadTabData(tabName);
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById(`${tabName}-tab`).classList.add('active');
+
+  const btn = event?.currentTarget || event?.target?.closest('button');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  loadTabData(tabName);
         }
         
         async function loadTabData(tabName) {
@@ -1883,7 +1803,7 @@ async function loadNannyData() {
   const totalHours = done.reduce((sum, e) => sum + (parseFloat(e.hours) || 0), 0);
   const totalPay = totalHours * (CONFIG.hourlyRate || 20);
   const totalEl = document.getElementById('weeklyTotal');
-  const payBtn = document.querySelector('[onclick="generateVenmoPayment()"]');
+  const payBtn = document.getElementById('payBtn');
   
   if (paymentStatus && paymentStatus.isPaid) {
     // Week is paid - show green checkmark
@@ -2046,7 +1966,7 @@ Total: ${fmtUSD(total)}`;
       if (result && result.success) {
         alert('✅ Payment marked as complete!');
         await loadNannyData();       // refresh “PAID” state
-        await loadPaymentHistory();  // refresh history list (if visible)
+        await loadPaymentHistoryUI();  // refresh history list (if visible)
       } else {
         alert('Could not save payment record.');
       }
@@ -2142,58 +2062,20 @@ function getWeekStatusBadge(isPaid) {
   }
 }
         // ===== INITIALIZATION =====
-async function initializeFamilyHub() {
-    console.log('🚀 Initializing Family Hub...');
-    
-    // First, try to load settings from Google Sheets
-    const settings = await callGoogleScript('getSettings');
-    
-    if (settings && settings.configured) {
-        // Apply settings from Sheets to everyone
-        CONFIG.scriptUrl = settings.scriptUrl || CONFIG.scriptUrl;
-        CONFIG.nannyName = settings.nannyName || CONFIG.nannyName;
-        CONFIG.hourlyRate = parseFloat(settings.hourlyRate) || CONFIG.hourlyRate;
-        CONFIG.yourName = settings.yourName || CONFIG.yourName;
-        CONFIG.partnerName = settings.partnerName || CONFIG.partnerName;
-        CONFIG.venmoUsername = settings.venmoUsername || CONFIG.venmoUsername;
-        
-        console.log('✅ Loaded shared settings from Google Sheets');
-    } else if (!CONFIG.scriptUrl) {
-        console.log('No settings found in Sheets and no local config');
-        if (CONFIG.userRole === 'admin' || CONFIG.userRole === 'family') {
-            showSetupWizard();
-            return;
-        }
-    }
-    await syncClockFromServer();
-    await loadDashboard();
-    console.log('✅ Family Hub ready!');
-}
+
         // ===== MAIN ENTRY POINT =====
         document.addEventListener('DOMContentLoaded', () => {
-            // Check if user has a role
-            const hasRole = checkAndInitializeRole();
-            
-            if (!hasRole) {
-                // No role found - show selection
-                showRoleSelection();
-            } else {
-                // Role exists - apply restrictions and check if setup is needed
-                applyRoleRestrictions();
-                
-                if (!CONFIG.scriptUrl && CONFIG.userRole === 'family') {
-                    showSetupWizard();
-                } else if (!CONFIG.scriptUrl && CONFIG.userRole === 'nanny') {
-                    alert('Please contact your employer for setup. The app is not yet configured.');
-                    showRoleSelection();
-                } else {
-                    initializeFamilyHub();
-                }
-            }
-        });
+  if (CONFIG.scriptUrl && !/YOUR_ACTUAL_SCRIPT_ID_HERE/.test(CONFIG.scriptUrl)) {
+    initializeApp();
+  } else {
+    alert('⚠️ App not configured!\n\nEdit index.html and set CONFIG.scriptUrl to your Google Script /exec URL.');
+  }
+});
+
     </script>
 </body>
 </html>
+
 
 
 
