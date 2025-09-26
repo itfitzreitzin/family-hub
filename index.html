@@ -1604,50 +1604,46 @@ async function callGoogleScript(action, params = {}) {
 
 
         // ===== SETTINGS FUNCTIONS =====
-        function saveSettings() {
-  const nannyName = document.getElementById('nannyName').value;
-  const hourlyRate = document.getElementById('hourlyRate').value;
-  const venmoRaw  = document.getElementById('venmoUsername').value;
-
-  const venmoClean = sanitizeVenmo(venmoRaw); // <- no leading @
-
-  localStorage.setItem('nannyName', nannyName);
-  localStorage.setItem('hourlyRate', hourlyRate);
-  localStorage.setItem('venmoUsername', venmoClean);
-
-  CONFIG.nannyName = nannyName;
-  CONFIG.hourlyRate = parseFloat(hourlyRate);
-  CONFIG.venmoUsername = venmoClean;
-
-  // Re-display with @ so it looks familiar
-  document.getElementById('venmoUsername').value = venmoClean ? '@' + venmoClean : '';
-
-  alert('Settings saved successfully!');
-}
+async function saveSettings() {
+    const nannyName = document.getElementById('nannyName').value;
+    const hourlyRate = document.getElementById('hourlyRate').value;
+    const venmoRaw = document.getElementById('venmoUsername').value;
+    
+    const venmoClean = sanitizeVenmo(venmoRaw);
+    
+    // Save to Google Sheets for everyone
+    const result = await callGoogleScript('saveSettings', {
+        nannyName: nannyName,
+        hourlyRate: hourlyRate,
+        venmoUsername: venmoClean,
+        yourName: CONFIG.yourName,
+        partnerName: CONFIG.partnerName,
+        scriptUrl: CONFIG.scriptUrl
+    });
+    
+    if (result && result.success) {
+        // Update local CONFIG
+        CONFIG.nannyName = nannyName;
+        CONFIG.hourlyRate = parseFloat(hourlyRate);
+        CONFIG.venmoUsername = venmoClean;
         
-        function saveAllSettings() {
-            const scriptUrl = document.getElementById('scriptUrlSetting').value;
-            const yourName = document.getElementById('yourNameSetting').value;
-            const partnerName = document.getElementById('partnerNameSetting').value;
-            
-            if (scriptUrl) {
-                localStorage.setItem('scriptUrl', scriptUrl);
-                CONFIG.scriptUrl = scriptUrl;
-            }
-            
-            if (yourName) {
-                localStorage.setItem('yourName', yourName);
-                CONFIG.yourName = yourName;
-            }
-            
-            if (partnerName) {
-                localStorage.setItem('partnerName', partnerName);
-                CONFIG.partnerName = partnerName;
-            }
-            
-            saveSettings();
-            alert('All settings updated!');
-        }
+        // Also update localStorage as backup
+        localStorage.setItem('nannyName', nannyName);
+        localStorage.setItem('hourlyRate', hourlyRate);
+        localStorage.setItem('venmoUsername', venmoClean);
+        
+        document.getElementById('venmoUsername').value = venmoClean ? '@' + venmoClean : '';
+        
+        alert('Settings saved for all users!');
+        await loadDashboard(); // Refresh with new settings
+    } else {
+        alert('Error saving settings to cloud. Using local save only.');
+        // Fallback to local save
+        localStorage.setItem('nannyName', nannyName);
+        localStorage.setItem('hourlyRate', hourlyRate);
+        localStorage.setItem('venmoUsername', venmoClean);
+    }
+}
         
         function loadSettings() {
             if (document.getElementById('nannyName')) {
@@ -1742,19 +1738,33 @@ Total: ${fmtUSD(total)}`;
 
 
         // ===== INITIALIZATION =====
-        async function initializeFamilyHub() {
-            console.log('🚀 Initializing Family Hub...');
-            console.log('User Role:', CONFIG.userRole);
-            
-            if (!CONFIG.scriptUrl) {
-                console.log('Script URL not configured');
-                return;
-            }
-            
-            await loadDashboard();
-            console.log('✅ Family Hub ready!');
-        }
+async function initializeFamilyHub() {
+    console.log('🚀 Initializing Family Hub...');
+    
+    // First, try to load settings from Google Sheets
+    const settings = await callGoogleScript('getSettings');
+    
+    if (settings && settings.configured) {
+        // Apply settings from Sheets to everyone
+        CONFIG.scriptUrl = settings.scriptUrl || CONFIG.scriptUrl;
+        CONFIG.nannyName = settings.nannyName || CONFIG.nannyName;
+        CONFIG.hourlyRate = parseFloat(settings.hourlyRate) || CONFIG.hourlyRate;
+        CONFIG.yourName = settings.yourName || CONFIG.yourName;
+        CONFIG.partnerName = settings.partnerName || CONFIG.partnerName;
+        CONFIG.venmoUsername = settings.venmoUsername || CONFIG.venmoUsername;
         
+        console.log('✅ Loaded shared settings from Google Sheets');
+    } else if (!CONFIG.scriptUrl) {
+        console.log('No settings found in Sheets and no local config');
+        if (CONFIG.userRole === 'admin' || CONFIG.userRole === 'family') {
+            showSetupWizard();
+            return;
+        }
+    }
+    
+    await loadDashboard();
+    console.log('✅ Family Hub ready!');
+}
         // ===== MAIN ENTRY POINT =====
         document.addEventListener('DOMContentLoaded', () => {
             // Check if user has a role
@@ -1780,6 +1790,7 @@ Total: ${fmtUSD(total)}`;
     </script>
 </body>
 </html>
+
 
 
 
