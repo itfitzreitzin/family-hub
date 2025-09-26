@@ -1044,9 +1044,9 @@
                     <div id="weeklyTotal" style="font-size: 2em; color: #667eea; margin: 10px 0;">
   Total: $0.00 (0.0 hours)
 </div>
-                    <button class="btn btn-primary btn-large family-only" onclick="generateVenmoPayment()">
-  Generate Venmo Payment
-</button>
+                   <button class="btn btn-primary btn-large family-only" onclick="generateVenmoPaymentWithTracking()">
+                     Generate Venmo Payment
+                    </button>
                 </div>
             </div>
         </div>
@@ -1667,27 +1667,21 @@ async function generateVenmoPaymentWithTracking() {
     // 1) Read & validate Venmo handle
     const raw = (CONFIG.venmoUsername || '').trim();
     const handle = sanitizeVenmo(raw); // removes leading @
-
-    // Block placeholder or empty handle
     if (!raw || /^@?username$/i.test(raw)) {
       alert('Set your real Venmo Username in Settings (e.g., @nickreitzin), then try again.');
       return;
     }
 
-    // 2) Pull this week's entries for THIS nanny
+    // 2) Pull this week's completed shifts
     const rate = Number(CONFIG.hourlyRate) || 20;
     const res = await callGoogleScript('getTimeEntries', { weekOnly: true, name: CONFIG.nannyName });
     const entries = res?.entries || [];
-
-    // only completed shifts
     const done = entries.filter(e => e.clockOut);
     const hours = done.reduce((sum, e) => sum + (parseFloat(e.hours) || 0), 0);
-
     if (!hours) {
       alert('No completed hours recorded this week.');
       return;
     }
-
     const total = +(hours * rate).toFixed(2);
 
     // 3) Build week-of label (Sunday 00:00)
@@ -1703,90 +1697,49 @@ Hours: ${hours.toFixed(1)}
 Rate: ${fmtUSD(rate)}/hour
 Total: ${fmtUSD(total)}`;
 
-    // 4) Mobile → open Venmo app; else → copy note
+    // 4) Mobile → open Venmo app; otherwise copy note
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
     if (isMobile && handle) {
       const venmoUrl =
         `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(handle)}` +
         `&amount=${encodeURIComponent(total.toFixed(2))}` +
         `&note=${encodeURIComponent(note)}`;
-
       const ok = confirm(`Pay ${fmtUSD(total)} to @${handle} via Venmo?\n\nOK = open Venmo · Cancel = copy details instead`);
       if (ok) {
         window.location.href = venmoUrl;
-        return;
+      } else {
+        try { await navigator.clipboard.writeText(note); alert(`✅ Details copied.\n\n${note}`); }
+        catch { prompt('Copy this payment message:', note); }
       }
-      // fall through to copy
+    } else {
+      try { await navigator.clipboard.writeText(note); alert(`✅ Details copied.\n\n${note}`); }
+      catch { prompt('Copy this payment message:', note); }
     }
 
-    // Desktop or canceled: copy details
-    try {
-      await navigator.clipboard.writeText(note);
-      alert(`✅ Payment details copied to clipboard.\n\n${note}\n\nPaste into Venmo when sending.`);
-    } catch {
-      prompt('Copy this payment message:', note); // ultra-fallback
-    }
-  } catch (err) {
-    console.error('generateVenmoPayment error:', err);
-    alert('Could not generate the Venmo payment. Open the console for details.');
-  }
-}
-
-  // After successful payment generation, ask if paid
-  const markPaid = confirm('After sending payment, click OK to mark this week as paid.');
-  
-  if (markPaid) {
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-    weekStart.setHours(0, 0, 0, 0);
-    
-    const reference = prompt('Enter payment reference (Venmo transaction ID, optional):');
-    
-    const result = await callGoogleScript('markWeekPaid', {
-      weekStart: weekStart.toISOString(),
-      nannyName: CONFIG.nannyName,
-      hours: totalHours,
-      amount: totalPay,
-      method: 'Venmo',
-      reference: reference || ''
-    });
-    
-    if (result && result.success) {
-      alert('✅ Payment marked as complete!');
-      await loadNannyDataWithPaymentStatus(); // Refresh view
-    }
-  }
-    setTimeout(async () => {
-      const markPaid = confirm('After sending the Venmo payment, click OK to mark this week as paid.');
-      
-      if (markPaid) {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        weekStart.setHours(0, 0, 0, 0);
-        
-        const reference = prompt('Enter Venmo transaction ID (optional):') || '';
-        
-        const result = await callGoogleScript('markWeekPaid', {
-          weekStart: weekStart.toISOString(),
-          nannyName: CONFIG.nannyName,
-          hours: totalHours,
-          amount: total,
-          method: 'Venmo',
-          reference: reference
-        });
-        
-        if (result && result.success) {
-          alert('✅ Payment marked as complete!');
-          await loadNannyData(); // Refresh to show paid status
-        }
+    // 5) Ask to mark as paid and record it
+    const markPaid = confirm('After you send the payment, click OK to mark this week as PAID.');
+    if (markPaid) {
+      const reference = prompt('Enter Venmo transaction ID (optional):') || '';
+      const result = await callGoogleScript('markWeekPaid', {
+        weekStart: weekStart.toISOString(),
+        nannyName: CONFIG.nannyName,
+        hours: hours.toFixed(2),
+        amount: total.toFixed(2),
+        method: 'Venmo',
+        reference
+      });
+      if (result && result.success) {
+        alert('✅ Payment marked as complete!');
+        await loadNannyData();       // refresh “PAID” state
+        await loadPaymentHistory();  // refresh history list (if visible)
+      } else {
+        alert('Could not save payment record.');
       }
-    }, 100);
-    
+    }
   } catch (err) {
-    console.error('Payment error:', err);
-    alert('Error generating payment');
-  }    
+    console.error('generateVenmoPaymentWithTracking error:', err);
+    alert('Could not generate/record the payment. Check console for details.');
+  }
 }
 
 // Add payment history view
@@ -1926,6 +1879,7 @@ async function initializeFamilyHub() {
     </script>
 </body>
 </html>
+
 
 
 
