@@ -1517,8 +1517,8 @@ async function callGoogleScript(action, params = {}) {
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   return res.json();
 }
-     async function loadNannyDataWithPaymentStatus() {
-  // 1) Update clocked-in status + timer
+async function loadNannyData() {
+  // 1) Check clock-in status
   const status = await callGoogleScript('getCurrentStatus', { name: CONFIG.nannyName });
   if (status?.status === 'clocked_in') {
     currentClockInTime = new Date(status.since);
@@ -1529,14 +1529,22 @@ async function callGoogleScript(action, params = {}) {
     stopTimer();
   }
 
-  // 2) Get this week’s entries for THIS nanny
+  // 2) Get week's entries
   const res = await callGoogleScript('getTimeEntries', { weekOnly: true, name: CONFIG.nannyName });
   const entries = res?.entries || [];
-
-  // Only completed shifts (have a clockOut)
   const done = entries.filter(e => e.clockOut);
 
-  // 3) Rebuild the summary table body
+  // 3) Check if this week is paid
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+  
+  const paymentStatus = await callGoogleScript('checkWeekPaymentStatus', {
+    weekStart: weekStart.toISOString(),
+    nannyName: CONFIG.nannyName
+  });
+
+  // 4) Update table
   const tbody = document.querySelector('#nanny-tab tbody');
   if (tbody) {
     tbody.innerHTML = '';
@@ -1556,54 +1564,42 @@ async function callGoogleScript(action, params = {}) {
     }
   }
 
-  // 4) Update the big total banner
+  // 5) Update totals and payment button based on status
   const totalHours = done.reduce((sum, e) => sum + (parseFloat(e.hours) || 0), 0);
   const totalPay = totalHours * (CONFIG.hourlyRate || 20);
   const totalEl = document.getElementById('weeklyTotal');
-  if (totalEl) totalEl.textContent = `Total: $${totalPay.toFixed(2)} (${totalHours.toFixed(1)} hours)`;
-}
-
-  // Check if this week has been paid
-  const weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  weekStart.setHours(0, 0, 0, 0);
-  
-  const paymentStatus = await callGoogleScript('checkWeekPaymentStatus', {
-    weekStart: weekStart.toISOString(),
-    nannyName: CONFIG.nannyName
-  });
-  
-  // Update UI based on payment status
-  const paymentBtn = document.querySelector('[onclick="generateVenmoPayment()"]');
-  const weeklyTotalDiv = document.getElementById('weeklyTotal');
+  const payBtn = document.querySelector('[onclick="generateVenmoPayment()"]');
   
   if (paymentStatus && paymentStatus.isPaid) {
-    // Week is already paid
-    if (paymentBtn) {
-      paymentBtn.innerHTML = '✓ Week Paid';
-      paymentBtn.className = 'btn btn-success btn-large family-only';
-      paymentBtn.disabled = true;
-    }
-    
-    if (weeklyTotalDiv) {
+    // Week is paid - show green checkmark
+    if (totalEl) {
       const paidDate = new Date(paymentStatus.paymentDate).toLocaleDateString();
-      weeklyTotalDiv.innerHTML = `
-        <div style="color: #48bb78;">✓ PAID on ${paidDate}</div>
-        <div style="font-size: 0.6em; color: #666;">
-          $${paymentStatus.amount.toFixed(2)} via ${paymentStatus.method}
+      totalEl.innerHTML = `
+        <div style="color: #48bb78; font-size: 1.5em;">✓ PAID</div>
+        <div style="font-size: 0.8em; color: #666;">
+          $${paymentStatus.amount.toFixed(2)} on ${paidDate}
         </div>
       `;
     }
+    if (payBtn) {
+      payBtn.innerHTML = '✓ Week Paid';
+      payBtn.className = 'btn btn-success btn-large family-only';
+      payBtn.disabled = true;
+      payBtn.style.opacity = '0.7';
+    }
   } else {
-    // Week not paid - show normal payment button
-    if (paymentBtn) {
-      paymentBtn.innerHTML = 'Generate Venmo Payment';
-      paymentBtn.className = 'btn btn-primary btn-large family-only';
-      paymentBtn.disabled = false;
+    // Week not paid - show normal
+    if (totalEl) {
+      totalEl.textContent = `Total: $${totalPay.toFixed(2)} (${totalHours.toFixed(1)} hours)`;
+    }
+    if (payBtn) {
+      payBtn.innerHTML = 'Generate Venmo Payment';
+      payBtn.className = 'btn btn-primary btn-large family-only';
+      payBtn.disabled = false;
+      payBtn.style.opacity = '1';
     }
   }
 }
-
         // ===== SETTINGS FUNCTIONS =====
 async function saveSettings() {
     const nannyName = document.getElementById('nannyName').value;
@@ -1761,6 +1757,36 @@ Total: ${fmtUSD(total)}`;
       await loadNannyDataWithPaymentStatus(); // Refresh view
     }
   }
+    setTimeout(async () => {
+      const markPaid = confirm('After sending the Venmo payment, click OK to mark this week as paid.');
+      
+      if (markPaid) {
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        weekStart.setHours(0, 0, 0, 0);
+        
+        const reference = prompt('Enter Venmo transaction ID (optional):') || '';
+        
+        const result = await callGoogleScript('markWeekPaid', {
+          weekStart: weekStart.toISOString(),
+          nannyName: CONFIG.nannyName,
+          hours: totalHours,
+          amount: total,
+          method: 'Venmo',
+          reference: reference
+        });
+        
+        if (result && result.success) {
+          alert('✅ Payment marked as complete!');
+          await loadNannyData(); // Refresh to show paid status
+        }
+      }
+    }, 100);
+    
+  } catch (err) {
+    console.error('Payment error:', err);
+    alert('Error generating payment');
+  }    
 }
 
 // Add payment history view
@@ -1900,6 +1926,7 @@ async function initializeFamilyHub() {
     </script>
 </body>
 </html>
+
 
 
 
