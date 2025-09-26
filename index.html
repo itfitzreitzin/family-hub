@@ -1205,6 +1205,44 @@ async function syncClockFromServer() {
     stopTimer();
   }
 }
+        function phComposeReminder(weekStartISO, hours, amount, nannyName) {
+  const ws = new Date(weekStartISO);
+  const we = new Date(ws); we.setDate(ws.getDate() + 6);
+  const range = `${ws.toLocaleDateString()}–${we.toLocaleDateString()}`;
+  const hrs = Number(hours) || 0;
+  const amt = Number(amount) || (hrs * (Number(CONFIG.hourlyRate)||20));
+  // Sprinkle a little chankla humor 😄
+  return `Hey! Quick reminder 💬\n\n` +
+         `Week: ${range}\nHours: ${hrs.toFixed(1)}\nAmount: $${amt.toFixed(2)}\n\n` +
+         `When you get a sec, can you ping me? (no chankla plz 😅)`;
+}
+
+async function phRemind(weekStartISO, hours, amount, nannyName) {
+  const msg = phComposeReminder(weekStartISO, hours, amount, nannyName);
+
+  // 1) Try native share (best UX on mobile)
+  if (navigator.share) {
+    try {
+      await navigator.share({ text: msg });
+      return;
+    } catch (_) {/* fall through */}
+  }
+
+  // 2) Try SMS deep link (many mobile browsers)
+  // (some platforms prefer 'sms:&body=', some 'sms:?&body=' — we try the common one)
+  const smsUrl = `sms:&body=${encodeURIComponent(msg)}`;
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+    try { window.location.href = smsUrl; return; } catch(_) {/* fall through */}
+  }
+
+  // 3) Desktop fallback: copy to clipboard so nanny can paste in a text
+  try {
+    await navigator.clipboard.writeText(msg);
+    alert('Reminder text copied to clipboard — paste it into your messaging app.');
+  } catch {
+    prompt('Copy this reminder and send it:', msg);
+  }
+}
         function renderPaymentHistory(payments, totalCount) {
   const container = document.getElementById('paymentHistory');
   const summary   = document.getElementById('phSummary');
@@ -2156,6 +2194,7 @@ async function initializeFamilyHub() {
     </script>
 </body>
 </html>
+
 
 
 
