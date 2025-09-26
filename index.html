@@ -1038,7 +1038,9 @@
                     <div id="weeklyTotal" style="font-size: 2em; color: #667eea; margin: 10px 0;">
   Total: $0.00 (0.0 hours)
 </div>
-                    <button class="btn btn-primary btn-large family-only" onclick="generateVenmoPayment()">Generate Venmo Payment</button>
+                    <button class="btn btn-primary btn-large family-only" onclick="generateVenmoPayment()">
+  Generate Venmo Payment
+</button>
                 </div>
             </div>
         </div>
@@ -1135,6 +1137,8 @@
     </div>
     
     <script>
+        const fmtUSD = n => new Intl.NumberFormat('en-US', { style:'currency', currency:'USD' }).format(Number(n) || 0);
+const sanitizeVenmo = h => (h || '').toString().trim().replace(/^@+/, '');
         // ===== CONFIGURATION - UPDATE THESE VALUES =====
         const CONFIG = {
             scriptUrl: localStorage.getItem('scriptUrl') || '',
@@ -1394,7 +1398,7 @@
         }
         
         // ===== GOOGLE SHEETS INTEGRATION =====
-        async function callGoogleScript(action, params = {}) {
+async function callGoogleScript(action, params = {}) {
   if (!CONFIG.scriptUrl) {
     console.error('Script URL not configured');
     return null;
@@ -1403,16 +1407,17 @@
   const url = new URL(CONFIG.scriptUrl);
   url.searchParams.append('action', action);
   Object.keys(params).forEach(k => url.searchParams.append(k, params[k]));
-  url.searchParams.append('_ts', Date.now()); // <- bust browser cache
+  url.searchParams.append('_ts', Date.now()); // cache-buster ✅
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(url.toString()); // simple GET
     return await res.json();
   } catch (err) {
     console.error('Error calling script:', err);
     return null;
   }
 }
+
         // ===== TAB MANAGEMENT =====
         function switchTab(tabName, event) {
             // Hide all tabs
@@ -1655,62 +1660,74 @@
         
         // ===== PAYMENT FUNCTIONS =====
 async function generateVenmoPayment() {
-  const res = await callGoogleScript('getTimeEntries', { weekOnly: true, name: CONFIG.nannyName });
-  const entries = res?.entries || [];
+  try {
+    if (!CONFIG.scriptUrl) {
+      alert('Google Script URL is not set. Add it in Settings.');
+      return;
+    }
 
-  const hours = entries
-    .filter(e => e.clockOut && e.hours)               // only completed shifts
-    .reduce((sum, e) => sum + (parseFloat(e.hours) || 0), 0);
+    const handle = sanitizeVenmo(CONFIG.venmoUsername);
+    const rate = Number(CONFIG.hourlyRate) || 20;
 
-  const rate = Number(CONFIG.hourlyRate) || 20;
-  const total = +(hours * rate).toFixed(2);
+    // pull this week's entries for THIS nanny
+    const res = await callGoogleScript('getTimeEntries', { weekOnly: true, name: CONFIG.nannyName });
+    const entries = res?.entries || [];
 
-  if (!hours) {
-    alert('No completed hours recorded this week.');
-    return;
-  }
+    // only completed shifts
+    const done = entries.filter(e => e.clockOut);
 
-  // Week-of label (Sun at 00:00)
-  const d = new Date();
-  const weekStart = new Date(d);
-  weekStart.setDate(d.getDate() - d.getDay());
-  weekStart.setHours(0,0,0,0);
+    const hours = done.reduce((sum, e) => sum + (parseFloat(e.hours) || 0), 0);
+    if (!hours) {
+      alert('No completed hours recorded this week.');
+      return;
+    }
 
-  const note =
+    const total = +(hours * rate).toFixed(2);
+
+    // week-of label (Sunday 00:00)
+    const d = new Date();
+    const weekStart = new Date(d);
+    weekStart.setDate(d.getDate() - d.getDay());
+    weekStart.setHours(0,0,0,0);
+
+    const note =
 `Weekly payment for ${CONFIG.nannyName}
 Week of ${weekStart.toLocaleDateString()}
 Hours: ${hours.toFixed(1)}
 Rate: ${fmtUSD(rate)}/hour
 Total: ${fmtUSD(total)}`;
 
-  const handle = sanitizeVenmo(CONFIG.venmoUsername);
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-  if (isMobile && handle) {
-    // Open Venmo app
-    const venmoUrl =
-      `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(handle)}` +
-      `&amount=${encodeURIComponent(total.toFixed(2))}` +
-      `&note=${encodeURIComponent(note)}`;
+    // Mobile + venmo handle → open Venmo
+    if (isMobile && handle) {
+      const venmoUrl =
+        `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(handle)}` +
+        `&amount=${encodeURIComponent(total.toFixed(2))}` +
+        `&note=${encodeURIComponent(note)}`;
 
-    const ok = confirm(
-      `Pay ${fmtUSD(total)} to @${handle} via Venmo?\n\n(OK = open Venmo · Cancel = copy details)`
-    );
-    if (ok) {
-      window.location.href = venmoUrl;
-      return;
+      const ok = confirm(`Pay ${fmtUSD(total)} to @${handle} via Venmo?\n\nOK = open Venmo · Cancel = copy details instead`);
+      if (ok) {
+        window.location.href = venmoUrl;
+        return;
+      }
+      // fall through to copy
     }
-    // fall through to copy
-  }
 
-  // Desktop or no handle: copy details for manual pay
-  try {
-    await navigator.clipboard.writeText(note);
-    alert(`✅ Payment details copied to clipboard.\n\n${note}\n\nPaste into Venmo when sending.`);
-  } catch {
-    prompt('Copy this payment message:', note); // ultra-fallback
+    // Desktop or no handle → copy message
+    try {
+      await navigator.clipboard.writeText(note);
+      alert(`✅ Payment details copied to clipboard.\n\n${note}\n\nPaste into Venmo when sending.`);
+    } catch {
+      // ultra fallback
+      prompt('Copy this payment message:', note);
+    }
+  } catch (err) {
+    console.error('generateVenmoPayment error:', err);
+    alert('Could not generate the Venmo payment. Open the console for details.');
   }
 }
+
         // ===== INITIALIZATION =====
         async function initializeFamilyHub() {
             console.log('🚀 Initializing Family Hub...');
@@ -1750,6 +1767,7 @@ Total: ${fmtUSD(total)}`;
     </script>
 </body>
 </html>
+
 
 
 
