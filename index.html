@@ -1035,9 +1035,9 @@
                     </tbody>
                 </table>
                 <div class="payment-summary" style="text-align: center; margin-top: 20px;">
-                    <div style="font-size: 2em; color: #667eea; margin: 10px 0;">
-                        Total: $0.00 (0.0 hours)
-                    </div>
+                    <div id="weeklyTotal" style="font-size: 2em; color: #667eea; margin: 10px 0;">
+  Total: $0.00 (0.0 hours)
+</div>
                     <button class="btn btn-primary btn-large family-only" onclick="generateVenmoPayment()">Generate Venmo Payment</button>
                 </div>
             </div>
@@ -1552,7 +1552,7 @@
   return res.json();
 }
      async function loadNannyData() {
-  // 1) Are we currently clocked in?
+  // 1) Update clocked-in status + timer
   const status = await callGoogleScript('getCurrentStatus', { name: CONFIG.nannyName });
   if (status?.status === 'clocked_in') {
     currentClockInTime = new Date(status.since);
@@ -1563,39 +1563,40 @@
     stopTimer();
   }
 
-  // 2) Weekly entries
-  const entriesRes = await callGoogleScript('getTimeEntries', { weekOnly: true, name: CONFIG.nannyName });
-  const entries = entriesRes?.entries || [];
+  // 2) Get this week’s entries for THIS nanny
+  const res = await callGoogleScript('getTimeEntries', { weekOnly: true, name: CONFIG.nannyName });
+  const entries = res?.entries || [];
 
   // Only completed shifts (have a clockOut)
   const done = entries.filter(e => e.clockOut);
 
-  // 3) Rebuild table (if your <tbody> exists)
+  // 3) Rebuild the summary table body
   const tbody = document.querySelector('#nanny-tab tbody');
   if (tbody) {
     tbody.innerHTML = '';
-    done.forEach(e => {
+    for (const e of done) {
       const hours = parseFloat(e.hours) || 0;
       const pay = hours * (CONFIG.hourlyRate || 20);
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${new Date(e.date).toLocaleDateString()}</td>
-        <td>${new Date(e.clockIn).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
-        <td>${new Date(e.clockOut).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
+        <td>${new Date(e.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+        <td>${new Date(e.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
         <td>${hours.toFixed(1)}</td>
         <td>$${pay.toFixed(2)}</td>
         <td>${e.notes || ''}</td>
       `;
       tbody.appendChild(tr);
-    });
+    }
   }
 
-  // 4) Update big total
+  // 4) Update the big total banner
   const totalHours = done.reduce((sum, e) => sum + (parseFloat(e.hours) || 0), 0);
   const totalPay = totalHours * (CONFIG.hourlyRate || 20);
   const totalEl = document.getElementById('weeklyTotal');
   if (totalEl) totalEl.textContent = `Total: $${totalPay.toFixed(2)} (${totalHours.toFixed(1)} hours)`;
 }
+
 
         // ===== SETTINGS FUNCTIONS =====
         function saveSettings() {
@@ -1749,6 +1750,7 @@ Total: ${fmtUSD(total)}`;
     </script>
 </body>
 </html>
+
 
 
 
