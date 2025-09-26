@@ -1605,20 +1605,25 @@ async function callGoogleScript(action, params = {}) {
 
         // ===== SETTINGS FUNCTIONS =====
         function saveSettings() {
-            const nannyName = document.getElementById('nannyName').value;
-            const hourlyRate = document.getElementById('hourlyRate').value;
-            const venmoUsername = document.getElementById('venmoUsername').value;
-            
-            localStorage.setItem('nannyName', nannyName);
-            localStorage.setItem('hourlyRate', hourlyRate);
-            localStorage.setItem('venmoUsername', venmoUsername);
-            
-            CONFIG.nannyName = nannyName;
-            CONFIG.hourlyRate = parseFloat(hourlyRate);
-            CONFIG.venmoUsername = venmoUsername;
-            
-            alert('Settings saved successfully!');
-        }
+  const nannyName = document.getElementById('nannyName').value;
+  const hourlyRate = document.getElementById('hourlyRate').value;
+  const venmoRaw  = document.getElementById('venmoUsername').value;
+
+  const venmoClean = sanitizeVenmo(venmoRaw); // <- no leading @
+
+  localStorage.setItem('nannyName', nannyName);
+  localStorage.setItem('hourlyRate', hourlyRate);
+  localStorage.setItem('venmoUsername', venmoClean);
+
+  CONFIG.nannyName = nannyName;
+  CONFIG.hourlyRate = parseFloat(hourlyRate);
+  CONFIG.venmoUsername = venmoClean;
+
+  // Re-display with @ so it looks familiar
+  document.getElementById('venmoUsername').value = venmoClean ? '@' + venmoClean : '';
+
+  alert('Settings saved successfully!');
+}
         
         function saveAllSettings() {
             const scriptUrl = document.getElementById('scriptUrlSetting').value;
@@ -1666,9 +1671,14 @@ async function generateVenmoPayment() {
       return;
     }
 
-    const handle = sanitizeVenmo(CONFIG.venmoUsername);
-    const rate = Number(CONFIG.hourlyRate) || 20;
+    const handle = sanitizeVenmo(raw); // removes leading @
+    const raw = (CONFIG.venmoUsername || '').trim();
 
+// Block the placeholder or empty handle
+if (!raw || /^@?username$/i.test(raw)) {
+  alert('Set your real Venmo Username in Settings (e.g., @nickreitzin), then try again.');
+  return;
+const rate = Number(CONFIG.hourlyRate) || 20;
     // pull this week's entries for THIS nanny
     const res = await callGoogleScript('getTimeEntries', { weekOnly: true, name: CONFIG.nannyName });
     const entries = res?.entries || [];
@@ -1767,6 +1777,7 @@ Total: ${fmtUSD(total)}`;
     </script>
 </body>
 </html>
+
 
 
 
