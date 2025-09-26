@@ -1034,6 +1034,12 @@
                         </tr>
                     </tbody>
                 </table>
+                <div class="card">
+                    <h2>💰 Payment History</h2>
+                    <div id="paymentHistory">
+                        <!-- History loads here -->
+                    </div>
+                </div>
                 <div class="payment-summary" style="text-align: center; margin-top: 20px;">
                     <div id="weeklyTotal" style="font-size: 2em; color: #667eea; margin: 10px 0;">
   Total: $0.00 (0.0 hours)
@@ -1511,7 +1517,7 @@ async function callGoogleScript(action, params = {}) {
   if (!res.ok) throw new Error(`Request failed: ${res.status}`);
   return res.json();
 }
-     async function loadNannyData() {
+     async function loadNannyDataWithPaymentStatus() {
   // 1) Update clocked-in status + timer
   const status = await callGoogleScript('getCurrentStatus', { name: CONFIG.nannyName });
   if (status?.status === 'clocked_in') {
@@ -1557,6 +1563,46 @@ async function callGoogleScript(action, params = {}) {
   if (totalEl) totalEl.textContent = `Total: $${totalPay.toFixed(2)} (${totalHours.toFixed(1)} hours)`;
 }
 
+  // Check if this week has been paid
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+  
+  const paymentStatus = await callGoogleScript('checkWeekPaymentStatus', {
+    weekStart: weekStart.toISOString(),
+    nannyName: CONFIG.nannyName
+  });
+  
+  // Update UI based on payment status
+  const paymentBtn = document.querySelector('[onclick="generateVenmoPayment()"]');
+  const weeklyTotalDiv = document.getElementById('weeklyTotal');
+  
+  if (paymentStatus && paymentStatus.isPaid) {
+    // Week is already paid
+    if (paymentBtn) {
+      paymentBtn.innerHTML = '✓ Week Paid';
+      paymentBtn.className = 'btn btn-success btn-large family-only';
+      paymentBtn.disabled = true;
+    }
+    
+    if (weeklyTotalDiv) {
+      const paidDate = new Date(paymentStatus.paymentDate).toLocaleDateString();
+      weeklyTotalDiv.innerHTML = `
+        <div style="color: #48bb78;">✓ PAID on ${paidDate}</div>
+        <div style="font-size: 0.6em; color: #666;">
+          $${paymentStatus.amount.toFixed(2)} via ${paymentStatus.method}
+        </div>
+      `;
+    }
+  } else {
+    // Week not paid - show normal payment button
+    if (paymentBtn) {
+      paymentBtn.innerHTML = 'Generate Venmo Payment';
+      paymentBtn.className = 'btn btn-primary btn-large family-only';
+      paymentBtn.disabled = false;
+    }
+  }
+}
 
         // ===== SETTINGS FUNCTIONS =====
 async function saveSettings() {
@@ -1615,7 +1661,7 @@ async function saveSettings() {
         }
         
 // ===== PAYMENT FUNCTIONS =====
-async function generateVenmoPayment() {
+async function generateVenmoPaymentWithTracking() {
   try {
     if (!CONFIG.scriptUrl) {
       alert('Google Script URL is not set. Add it in Settings.');
@@ -1691,7 +1737,116 @@ Total: ${fmtUSD(total)}`;
   }
 }
 
+  // After successful payment generation, ask if paid
+  const markPaid = confirm('After sending payment, click OK to mark this week as paid.');
+  
+  if (markPaid) {
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    weekStart.setHours(0, 0, 0, 0);
+    
+    const reference = prompt('Enter payment reference (Venmo transaction ID, optional):');
+    
+    const result = await callGoogleScript('markWeekPaid', {
+      weekStart: weekStart.toISOString(),
+      nannyName: CONFIG.nannyName,
+      hours: totalHours,
+      amount: totalPay,
+      method: 'Venmo',
+      reference: reference || ''
+    });
+    
+    if (result && result.success) {
+      alert('✅ Payment marked as complete!');
+      await loadNannyDataWithPaymentStatus(); // Refresh view
+    }
+  }
+}
 
+// Add payment history view
+function addPaymentHistorySection() {
+  return `
+    <div class="card">
+      <h2>💰 Payment History</h2>
+      <div id="paymentHistory">
+        <div class="loading">Loading payment history...</div>
+      </div>
+      <button class="btn btn-primary" onclick="loadPaymentHistory()">
+        View All Payment History
+      </button>
+    </div>
+  `;
+}
+
+async function loadPaymentHistory() {
+  const history = await callGoogleScript('getPaymentHistory');
+  
+  if (!history || !history.payments || history.payments.length === 0) {
+    document.getElementById('paymentHistory').innerHTML = 
+      '<p style="color: #666;">No payment history yet.</p>';
+    return;
+  }
+  
+  let html = `
+    <table style="width: 100%; margin-bottom: 20px;">
+      <thead>
+        <tr>
+          <th>Week</th>
+          <th>Hours</th>
+          <th>Amount</th>
+          <th>Paid Date</th>
+          <th>Method</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  
+  // Show last 5 payments
+  const recentPayments = history.payments.slice(0, 5);
+  
+  recentPayments.forEach(payment => {
+    const weekStart = new Date(payment.weekStart).toLocaleDateString();
+    const paidDate = new Date(payment.paidDate).toLocaleDateString();
+    
+    html += `
+      <tr>
+        <td>${weekStart}</td>
+        <td>${payment.hours.toFixed(1)}</td>
+        <td>$${payment.amount.toFixed(2)}</td>
+        <td>${paidDate}</td>
+        <td>${payment.method}</td>
+      </tr>
+    `;
+  });
+  
+  html += '</tbody></table>';
+  
+  // Calculate totals
+  const totalPaid = history.payments.reduce((sum, p) => sum + p.amount, 0);
+  const totalHours = history.payments.reduce((sum, p) => sum + p.hours, 0);
+  
+  html += `
+    <div style="text-align: center; padding: 20px; background: #f7fafc; border-radius: 8px;">
+      <div style="color: #667eea; font-size: 1.2em;">
+        Total Paid: $${totalPaid.toFixed(2)}
+      </div>
+      <div style="color: #666; font-size: 0.9em;">
+        ${totalHours.toFixed(1)} hours over ${history.payments.length} weeks
+      </div>
+    </div>
+  `;
+  
+  document.getElementById('paymentHistory').innerHTML = html;
+}
+
+// Weekly status indicators
+function getWeekStatusBadge(isPaid) {
+  if (isPaid) {
+    return '<span style="background: #48bb78; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.85em;">✓ Paid</span>';
+  } else {
+    return '<span style="background: #f56565; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.85em;">Unpaid</span>';
+  }
+}
         // ===== INITIALIZATION =====
 async function initializeFamilyHub() {
     console.log('🚀 Initializing Family Hub...');
@@ -1745,6 +1900,7 @@ async function initializeFamilyHub() {
     </script>
 </body>
 </html>
+
 
 
 
