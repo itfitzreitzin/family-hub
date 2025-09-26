@@ -1140,21 +1140,147 @@
         const fmtUSD = n => new Intl.NumberFormat('en-US', { style:'currency', currency:'USD' }).format(Number(n) || 0);
 const sanitizeVenmo = h => (h || '').toString().trim().replace(/^@+/, '');
         // ===== CONFIGURATION - UPDATE THESE VALUES =====
-        const CONFIG = {
-            scriptUrl: localStorage.getItem('scriptUrl') || '',
-            sheetId: localStorage.getItem('sheetId') || '',
-            yourCalendarId: localStorage.getItem('yourCalendarId') || 'your-email@gmail.com',
-            partnerCalendarId: localStorage.getItem('partnerCalendarId') || 'partner-email@gmail.com',
-            nannyName: localStorage.getItem('nannyName') || 'Sarah',
-            hourlyRate: parseFloat(localStorage.getItem('hourlyRate')) || 20,
-            yourName: localStorage.getItem('yourName') || 'Parent 1',
-            partnerName: localStorage.getItem('partnerName') || 'Parent 2',
-            venmoUsername: localStorage.getItem('venmoUsername') || '@username',
-            userRole: null,
-            currentUser: null,
-            familyPIN: '1234' // Change this to your desired PIN
-        };
+        // ===== CONFIGURATION - HARDCODE YOUR SCRIPT URL HERE =====
+const CONFIG = {
+    // THIS IS THE ONLY THING YOU NEED TO HARDCODE
+    scriptUrl: 'https://script.google.com/macros/s/AKfycbz0D5lzPKspVmhzhliFK26yzTrtUMaATAmxJOLf4nlPM78TwRe8II7cQi6C6VVGS5AFsQ/exec',
+    
+    // Everything else loads from Google Sheets
+    nannyName: '',
+    hourlyRate: 20,
+    yourName: '',
+    partnerName: '',
+    venmoUsername: '',
+    familyPIN: '1234',
+    userRole: null
+};
 
+// ===== NO MORE LOCALSTORAGE - EVERYTHING FROM SHEETS =====
+async function initializeApp() {
+    // 1. Determine role from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const role = urlParams.get('role');
+    const setupKey = urlParams.get('setup');
+    
+    // Set role based on URL
+    if (setupKey === 'admin123') {
+        CONFIG.userRole = 'admin';
+    } else if (role === 'nanny') {
+        CONFIG.userRole = 'nanny';
+    } else if (role === 'family') {
+        CONFIG.userRole = 'family';
+    } else {
+        // No role in URL - show selection
+        showRoleSelection();
+        return;
+    }
+    
+    // 2. Apply role restrictions immediately
+    applyRoleRestrictions();
+    
+    // 3. Load settings from Google Sheets (not localStorage!)
+    try {
+        const settings = await callGoogleScript('getSettings');
+        
+        if (settings && settings.configured) {
+            // Apply settings from Sheets
+            CONFIG.nannyName = settings.nannyName || 'Nanny';
+            CONFIG.hourlyRate = parseFloat(settings.hourlyRate) || 20;
+            CONFIG.yourName = settings.yourName || 'Parent 1';
+            CONFIG.partnerName = settings.partnerName || 'Parent 2';
+            CONFIG.venmoUsername = settings.venmoUsername || '';
+            CONFIG.familyPIN = settings.familyPIN || '1234';
+            
+            console.log('✅ Settings loaded from Google Sheets');
+        } else {
+            // No settings in Sheets yet
+            if (CONFIG.userRole === 'admin') {
+                showSetupWizard();
+                return;
+            } else {
+                console.log('Waiting for admin to configure settings');
+            }
+        }
+    } catch (error) {
+        console.error('Error loading settings:', error);
+    }
+    
+    // 4. Initialize the app
+    await loadDashboard();
+    console.log('✅ Family Hub ready!');
+}
+
+// ===== SAVE SETTINGS TO SHEETS ONLY =====
+async function saveSettings() {
+    const settings = {
+        nannyName: document.getElementById('nannyName').value,
+        hourlyRate: document.getElementById('hourlyRate').value,
+        venmoUsername: document.getElementById('venmoUsername').value,
+        yourName: CONFIG.yourName,
+        partnerName: CONFIG.partnerName,
+        familyPIN: CONFIG.familyPIN
+    };
+    
+    // Save to Google Sheets (no localStorage!)
+    const result = await callGoogleScript('saveSettings', settings);
+    
+    if (result && result.success) {
+        // Update CONFIG with new values
+        Object.assign(CONFIG, settings);
+        alert('✅ Settings saved to cloud! All users will see these changes.');
+    } else {
+        alert('Error saving settings');
+    }
+}
+
+// ===== SIMPLIFIED COMPLETE SETUP =====
+async function completeSetup() {
+    const scriptUrl = document.getElementById('setupScriptUrl').value;
+    const nannyName = document.getElementById('setupNannyName').value;
+    const hourlyRate = document.getElementById('setupHourlyRate').value;
+    const yourName = document.getElementById('setupYourName').value;
+    const partnerName = document.getElementById('setupPartnerName').value;
+    
+    if (!scriptUrl || !nannyName) {
+        alert('Please fill in required fields');
+        return;
+    }
+    
+    // For first setup, we need to hardcode the script URL
+    alert('⚠️ IMPORTANT: You need to hardcode this Script URL in your index.html file on GitHub:\n\n' + scriptUrl);
+    
+    // Save settings to Google Sheets
+    const settings = {
+        nannyName: nannyName,
+        hourlyRate: hourlyRate,
+        yourName: yourName || 'Parent 1',
+        partnerName: partnerName || 'Parent 2',
+        scriptUrl: scriptUrl
+    };
+    
+    CONFIG.scriptUrl = scriptUrl; // Temporarily set for this session
+    
+    const result = await callGoogleScript('saveSettings', settings);
+    
+    if (result && result.success) {
+        const modal = document.querySelector('.modal-overlay');
+        if (modal) modal.remove();
+        
+        alert('✅ Setup complete! Settings saved to cloud.');
+        location.reload();
+    }
+}
+
+// ===== REPLACE DOMContentLoaded =====
+document.addEventListener('DOMContentLoaded', () => {
+    if (CONFIG.scriptUrl && CONFIG.scriptUrl !== 'https://script.google.com/macros/s/YOUR_ACTUAL_SCRIPT_ID_HERE/exec') {
+        // Script URL is configured - initialize
+        initializeApp();
+    } else {
+        // Script URL not configured
+        alert('⚠️ App not configured!\n\n1. Edit index.html on GitHub\n2. Replace YOUR_ACTUAL_SCRIPT_ID_HERE with your Google Script ID\n3. Commit and push changes');
+    }
+});
         // ===== ROLE-BASED ACCESS CONTROL =====
         function checkAndInitializeRole() {
             // Check URL parameters
@@ -1790,6 +1916,7 @@ async function initializeFamilyHub() {
     </script>
 </body>
 </html>
+
 
 
 
