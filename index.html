@@ -1001,7 +1001,7 @@
                     <button class="btn btn-primary">View History</button>
                 </div>
             </div>
-            
+     <!-- Weekly Summary -->       
             <div class="card">
                 <h2>📊 This Week's Summary</h2>
                 <table>
@@ -1034,7 +1034,19 @@
                         </tr>
                     </tbody>
                 </table>
-                <div class="card">
+                <div class="payment-summary" style="text-align: center; margin-top: 20px;">
+                    <div id="weeklyTotal" style="font-size: 2em; color: #667eea; margin: 10px 0;">
+                          Total: $0.00 (0.0 hours)
+                    </div>
+                    <button class="btn btn-primary btn-large family-only" 
+                            onclick="generateVenmoPaymentWithTracking()">
+                     Generate Venmo Payment
+                    </button>
+                </div>
+            </div>
+            
+<!-- Payment History -->
+            <div class="card">
                   <h2>💰 Payment History</h2>
                 
                   <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
@@ -1059,15 +1071,6 @@
                     <button class="btn" id="phNext" onclick="phNextPage()">Next →</button>
                   </div>
                 </div>
-                <div class="payment-summary" style="text-align: center; margin-top: 20px;">
-                    <div id="weeklyTotal" style="font-size: 2em; color: #667eea; margin: 10px 0;">
-  Total: $0.00 (0.0 hours)
-</div>
-                   <button class="btn btn-primary btn-large family-only" onclick="generateVenmoPaymentWithTracking()">
-                     Generate Venmo Payment
-                    </button>
-                </div>
-            </div>
         </div>
         
         <!-- Activities Tab -->
@@ -2042,6 +2045,7 @@ async function initializeFamilyHub() {
     </script>
 </body>
 </html>
+
 
 
 
