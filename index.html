@@ -1191,7 +1191,20 @@ function phBadge(paid){
     ? '<span style="background:#48bb78;color:white;padding:4px 10px;border-radius:999px;font-size:.8em;">Paid</span>'
     : '<span style="background:#f56565;color:white;padding:4px 10px;border-radius:999px;font-size:.8em;">Unpaid</span>';
 }
+// Re-sync the running clock from server state (works across tabs/devices)
+async function syncClockFromServer() {
+  const status = await callGoogleScript('getCurrentStatus', { name: CONFIG.nannyName });
+  if (!status) return;
 
+  if (status.status === 'clocked_in' && status.since) {
+    currentClockInTime = new Date(status.since);  // authoritative server start
+    updateClockDisplay(true, currentClockInTime);
+    startTimer();                                  // restarts (clears old interval inside)
+  } else {
+    updateClockDisplay(false, null);
+    stopTimer();
+  }
+}
 async function loadPaymentHistoryUI() {
   // read controls
   const statusEl = document.getElementById('phStatus');
@@ -1645,10 +1658,8 @@ async function callGoogleScript(action, params = {}) {
         
         function startTimer() {
             if (timerInterval) clearInterval(timerInterval);
-            
             timerInterval = setInterval(() => {
                 if (!currentClockInTime) return;
-                
                 const now = new Date();
                 const diff = now - currentClockInTime;
                 
@@ -2016,7 +2027,7 @@ async function initializeFamilyHub() {
             return;
         }
     }
-    
+    await syncClockFromServer();
     await loadDashboard();
     console.log('✅ Family Hub ready!');
 }
@@ -2045,6 +2056,7 @@ async function initializeFamilyHub() {
     </script>
 </body>
 </html>
+
 
 
 
