@@ -1205,6 +1205,100 @@ async function syncClockFromServer() {
     stopTimer();
   }
 }
+        function renderPaymentHistory(payments, totalCount) {
+  const container = document.getElementById('paymentHistory');
+  const summary   = document.getElementById('phSummary');
+  const role = (CONFIG.userRole || '').toLowerCase();
+  const isPriv = role === 'admin' || role === 'family';
+
+  if (!payments || payments.length === 0) {
+    container.innerHTML = '<p style="color:#666;">No payment history.</p>';
+    summary.textContent = '';
+    return;
+  }
+
+  let html = `
+  <table style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th>Week</th>
+        <th>Status</th>
+        <th>Hours</th>
+        <th>Amount</th>
+        <th>Paid Date</th>
+        <th>Method</th>
+        <th>Ref</th>
+        <th style="text-align:right;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+  `;
+
+  let subtotal = 0, subhours = 0;
+
+  payments.forEach(p => {
+    const paidDate = p.paidDate ? new Date(p.paidDate).toLocaleDateString() : '—';
+
+    // Role-based Actions cell
+    const actions = (() => {
+      if (p.isPaid) {
+        return isPriv
+          ? `
+            <button class="btn" onclick="phEditRef('${p.weekStart}','${p.nanny||''}','${(p.reference||'').replace(/"/g,'&quot;')}')">Edit ref</button>
+            <button class="btn btn-warning" onclick="phUnmarkPaid('${p.weekStart}','${p.nanny||''}')">Mark Unpaid</button>
+          `
+          : '—';
+      } else {
+        if (isPriv) {
+          return `<button class="btn btn-primary" onclick="generateVenmoPaymentWithTracking()">Record Payment</button>`;
+        }
+        if (role === 'nanny') {
+          return `
+            <button class="btn" onclick="phRemind('${p.weekStart}','${p.hours||0}','${p.amount||0}','${p.nanny||CONFIG.nannyName||'Nanny'}')">
+              Remind
+            </button>
+          `;
+        }
+        return '—';
+      }
+    })();
+
+    html += `
+      <tr>
+        <td>${p.weekLabel}</td>
+        <td>${phBadge(p.isPaid)}</td>
+        <td>${(p.hours||0).toFixed(1)}</td>
+        <td>${phFmt(p.amount||0)}</td>
+        <td>${paidDate}</td>
+        <td>${p.method||'—'}</td>
+        <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.reference||'—'}</td>
+        <td style="text-align:right;">${actions}</td>
+      </tr>
+    `;
+    subtotal += p.amount || 0;
+    subhours += p.hours  || 0;
+  });
+
+  html += `
+    </tbody>
+  </table>
+  <div style="margin-top:10px; text-align:right; color:#4a5568;">
+    Page subtotal: <strong>${phFmt(subtotal)}</strong> · ${subhours.toFixed(1)} hrs
+  </div>`;
+
+  container.innerHTML = html;
+
+  // summary + pager
+  PH_STATE.total = totalCount || 0;
+  const first = (PH_STATE.page - 1) * PH_STATE.pageSize + 1;
+  const last  = Math.min(PH_STATE.page * PH_STATE.pageSize, PH_STATE.total);
+  summary.textContent = PH_STATE.total ? `Showing ${first}–${last} of ${PH_STATE.total}` : '';
+
+  const prevBtn = document.getElementById('phPrev');
+  const nextBtn = document.getElementById('phNext');
+  if (prevBtn) prevBtn.disabled = PH_STATE.page <= 1;
+  if (nextBtn) nextBtn.disabled = last >= PH_STATE.total;
+}
 async function loadPaymentHistoryUI() {
   // read controls
   const statusEl = document.getElementById('phStatus');
@@ -1219,14 +1313,20 @@ async function loadPaymentHistoryUI() {
     page: String(PH_STATE.page)
   });
 
-  const container = document.getElementById('paymentHistory');
-  const summary   = document.getElementById('phSummary');
-
   if (!resp || !Array.isArray(resp.payments)) {
-    container.innerHTML = '<p style="color:#666;">No payment history.</p>';
-    summary.textContent = '';
+    renderPaymentHistory([], 0);
     return;
   }
+
+  renderPaymentHistory(resp.payments, resp.total || 0);
+}
+
+function phPrevPage(){ if (PH_STATE.page > 1){ PH_STATE.page--; loadPaymentHistoryUI(); } }
+function phNextPage(){
+  const maxPage = Math.ceil((PH_STATE.total || 0) / (PH_STATE.pageSize || 20));
+  if (PH_STATE.page < maxPage){ PH_STATE.page++; loadPaymentHistoryUI(); }
+}
+
 
   PH_STATE.total = resp.total || 0;
 
@@ -2056,6 +2156,7 @@ async function initializeFamilyHub() {
     </script>
 </body>
 </html>
+
 
 
 
